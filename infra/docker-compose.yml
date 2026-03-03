@@ -17,6 +17,8 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/arewegoing
+      SECRET_KEY: "dev-secret-change-this"
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
     depends_on:
       - db
 
