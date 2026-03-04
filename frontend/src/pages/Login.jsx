@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
+﻿import { AlertCircle, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -93,6 +93,14 @@ export default function Login() {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location, navigate]);
+
+  function goToSignup() {
+    try {
+      navigate("/signup");
+    } catch {
+      window.location.assign("/signup");
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -265,16 +273,13 @@ export default function Login() {
               </div>
             ) : null}
 
-            <p className="text-center text-sm text-[#ece6d9]/78">
-              New here?{" "}
-              <button
-                type="button"
-                className="login-text-link text-[#fcfaf5] transition hover:text-white"
-                onClick={() => navigate("/create")}
-              >
-                Create an account
-              </button>
-            </p>
+            <button
+              type="button"
+              className="login-text-link mx-auto block text-center text-sm text-[#ece6d9]/78 transition hover:text-white"
+              onClick={goToSignup}
+            >
+              New here? <span className="text-[#fcfaf5]">Create an account</span>
+            </button>
           </form>
         </section>
       </main>

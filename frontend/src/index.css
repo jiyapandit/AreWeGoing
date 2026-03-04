@@ -334,6 +334,50 @@ body {
   font: inherit;
 }
 
+.landing-shell {
+  background: #1a1d21;
+}
+
+.landing-overlay {
+  background-image:
+    linear-gradient(120deg, rgba(20, 24, 30, 0.55), rgba(49, 43, 35, 0.42)),
+    radial-gradient(circle at 16% 16%, rgba(231, 211, 178, 0.22), transparent 44%),
+    radial-gradient(circle at 84% 78%, rgba(144, 170, 194, 0.22), transparent 42%),
+    url("https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=2400&q=80");
+  background-size: cover;
+  background-position: center;
+}
+
+.landing-hero-overlay {
+  background: linear-gradient(to bottom, rgba(15, 15, 16, 0.12), rgba(18, 18, 20, 0.62));
+}
+
+.liquid-nav,
+.liquid-panel,
+.liquid-chip {
+  background: linear-gradient(142deg, rgba(58, 52, 44, 0.34), rgba(34, 41, 50, 0.34));
+  backdrop-filter: blur(18px) saturate(118%);
+  -webkit-backdrop-filter: blur(18px) saturate(118%);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.liquid-nav {
+  border: 1px solid rgba(247, 235, 216, 0.22);
+}
+
+.liquid-panel {
+  border: 1px solid rgba(247, 235, 216, 0.18);
+}
+
+.liquid-chip {
+  border: 1px solid rgba(247, 235, 216, 0.18);
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.liquid-chip:hover {
+  background: linear-gradient(142deg, rgba(67, 59, 50, 0.42), rgba(39, 47, 58, 0.44));
+}
+
 .liquid-frame:hover .liquid-ring-dark::before,
 .liquid-frame:focus-within .liquid-ring-dark::before {
   transform: rotate(-96deg);
