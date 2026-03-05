@@ -84,17 +84,34 @@ export default function CreateGroup() {
     }
   }
 
-  function sendInvite() {
+  async function sendInvite() {
     if (!group?.join_code) return;
     if (inviteEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) {
       setErrorMessage("Please enter a valid friend email.");
       return;
     }
-    const subject = encodeURIComponent(`Join my AreWeGoing group: ${group.name}`);
-    const body = encodeURIComponent(`Use code ${group.join_code} to join our group.\n\nJoin page: ${inviteUrl}`);
-    const to = inviteEmail.trim();
-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
-    setSuccessMessage("Invite draft opened in your email app.");
+    if (!inviteEmail.trim()) {
+      setErrorMessage("Enter an email to send invite.");
+      return;
+    }
+
+    try {
+      await axios.post(
+        `${groupsApiBaseUrl}/${group.id}/invites`,
+        { email: inviteEmail.trim().toLowerCase() },
+        { headers: { Authorization: `Bearer ${authToken}` }, timeout: 10000 }
+      );
+      setSuccessMessage("Invite sent.");
+      setInviteEmail("");
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        setErrorMessage("Only host can send invites.");
+      } else if (error?.response?.status === 404) {
+        setErrorMessage("Group not found.");
+      } else {
+        setErrorMessage("Could not send invite.");
+      }
+    }
   }
 
   return (

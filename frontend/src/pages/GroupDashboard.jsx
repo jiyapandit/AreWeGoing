@@ -1,5 +1,5 @@
 import axios from "axios";
-import { RefreshCcw, Users } from "lucide-react";
+import { Bell, Mail, RefreshCcw, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
@@ -30,8 +30,13 @@ export default function GroupDashboard() {
   const [status, setStatus] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [form, setForm] = useState(DEFAULT_FORM);
+  const [itinerary, setItinerary] = useState(null);
+  const [voteValue, setVoteValue] = useState("APPROVE");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invites, setInvites] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -54,17 +59,29 @@ export default function GroupDashboard() {
       setLoading(true);
       setErrorMessage("");
       try {
-        const [groupRes, membersRes, statusRes, metricsRes] = await Promise.all([
+        const [groupRes, membersRes, statusRes, metricsRes, invitesRes, notificationsRes] = await Promise.all([
           axios.get(`${groupsApiBaseUrl}/${groupId}`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/metrics`, { headers: authHeaders }),
+          axios.get(`${groupsApiBaseUrl}/${groupId}/invites`, { headers: authHeaders }),
+          axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
+            headers: authHeaders,
+          }),
         ]);
         if (!isMounted) return;
         setGroup(groupRes.data);
         setMembers(membersRes.data?.members || []);
         setStatus(statusRes.data);
         setMetrics(metricsRes.data);
+        setInvites(invitesRes.data || []);
+        setNotifications(notificationsRes.data || []);
+        try {
+          const itineraryRes = await axios.get(`${groupsApiBaseUrl}/${groupId}/itinerary`, { headers: authHeaders });
+          setItinerary(itineraryRes.data);
+        } catch {
+          setItinerary(null);
+        }
       } catch (error) {
         if (!isMounted) return;
         if (error?.response?.status === 403) {
@@ -103,25 +120,118 @@ export default function GroupDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [authHeaders, authToken, groupId, groupsApiBaseUrl, navigate]);
+  }, [authHeaders, authToken, groupId, groupsApiBaseUrl, navigate, rawApiBaseUrl]);
 
   async function refreshDashboard() {
     setSuccessMessage("");
     setErrorMessage("");
     setLoading(true);
     try {
-      const [membersRes, statusRes, metricsRes] = await Promise.all([
+      const [membersRes, statusRes, metricsRes, invitesRes, notificationsRes] = await Promise.all([
         axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/metrics`, { headers: authHeaders }),
+        axios.get(`${groupsApiBaseUrl}/${groupId}/invites`, { headers: authHeaders }),
+        axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
+          headers: authHeaders,
+        }),
       ]);
       setMembers(membersRes.data?.members || []);
       setStatus(statusRes.data);
       setMetrics(metricsRes.data);
+      setInvites(invitesRes.data || []);
+      setNotifications(notificationsRes.data || []);
+      try {
+        const itineraryRes = await axios.get(`${groupsApiBaseUrl}/${groupId}/itinerary`, { headers: authHeaders });
+        setItinerary(itineraryRes.data);
+      } catch {
+        setItinerary(null);
+      }
     } catch {
       setErrorMessage("Could not refresh dashboard data.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function generateItinerary() {
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/generate`, {}, { headers: authHeaders });
+      setItinerary(data);
+      setSuccessMessage("Itinerary draft generated.");
+      await refreshDashboard();
+    } catch (error) {
+      if (error?.response?.status === 409) {
+        setErrorMessage(error?.response?.data?.message || "Cannot generate itinerary.");
+      } else {
+        setErrorMessage("Could not generate itinerary.");
+      }
+    }
+  }
+
+  async function moveToReview() {
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/review`, {}, { headers: authHeaders });
+      setItinerary(data);
+      setSuccessMessage("Itinerary moved to review.");
+      await refreshDashboard();
+    } catch (error) {
+      setErrorMessage(error?.response?.data?.message || "Could not move itinerary to review.");
+    }
+  }
+
+  async function voteItinerary() {
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      await axios.post(`${groupsApiBaseUrl}/${groupId}/vote`, { value: voteValue }, { headers: authHeaders });
+      setSuccessMessage("Vote submitted.");
+      await refreshDashboard();
+    } catch (error) {
+      setErrorMessage(error?.response?.data?.message || "Could not submit vote.");
+    }
+  }
+
+  async function lockItineraryNow() {
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/lock`, {}, { headers: authHeaders });
+      setItinerary(data);
+      setSuccessMessage("Itinerary locked.");
+      await refreshDashboard();
+    } catch (error) {
+      setErrorMessage(error?.response?.data?.message || "Could not lock itinerary.");
+    }
+  }
+
+  async function sendInvite(event) {
+    event.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+    if (!inviteEmail.trim()) {
+      setErrorMessage("Enter email to invite.");
+      return;
+    }
+    try {
+      await axios.post(
+        `${groupsApiBaseUrl}/${groupId}/invites`,
+        { email: inviteEmail.trim().toLowerCase() },
+        { headers: authHeaders }
+      );
+      setInviteEmail("");
+      setSuccessMessage("Invite sent.");
+      await refreshDashboard();
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        setErrorMessage("Only host can send invites.");
+      } else {
+        setErrorMessage("Could not send invite.");
+      }
     }
   }
 
@@ -324,6 +434,130 @@ export default function GroupDashboard() {
                 );
               })}
               {members.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No members found.</p> : null}
+            </div>
+          </section>
+        </section>
+
+        <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+          <h2 className="font-serif text-3xl">Itinerary</h2>
+          <p className="mt-2 text-sm text-[#e8dcc8]/85">
+            State: <span className="text-[#fff7ea]">{itinerary?.state || "NOT_CREATED"}</span>
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={generateItinerary}
+              className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+            >
+              Generate
+            </button>
+            <button
+              type="button"
+              onClick={moveToReview}
+              className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+            >
+              Move to Review
+            </button>
+            <select
+              value={voteValue}
+              onChange={(e) => setVoteValue(e.target.value)}
+              className="rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none"
+            >
+              <option value="APPROVE">Approve</option>
+              <option value="CHANGES">Request Changes</option>
+            </select>
+            <button
+              type="button"
+              onClick={voteItinerary}
+              className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+            >
+              Vote
+            </button>
+            <button
+              type="button"
+              onClick={lockItineraryNow}
+              className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
+            >
+              Lock (Host)
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {itinerary?.days?.map((day) => (
+              <div key={day.day_number} className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-3">
+                <p className="text-sm uppercase tracking-[0.16em] text-[#e8dbc7]/75">Day {day.day_number}</p>
+                <div className="mt-2 space-y-2">
+                  {day.items.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-[#f1e6d6]/20 bg-black/20 px-3 py-2">
+                      <p className="text-[#f7efdf]">{item.title}</p>
+                      <p className="text-xs text-[#e8dbc7]/85">{item.summary}</p>
+                      <p className="mt-1 text-xs text-[#d2c7b3]/80">
+                        ${item.estimated_cost} | {item.duration_hours}h | {item.rationale}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!itinerary ? <p className="text-sm text-[#e8dbc7]/80">No itinerary generated yet.</p> : null}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+            <h2 className="font-serif text-3xl">Invite friends</h2>
+            <form onSubmit={sendInvite} className="mt-4 flex flex-wrap gap-2">
+              <input
+                type="email"
+                placeholder="friend@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                className="min-w-[14rem] flex-1 rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none"
+              />
+              <button
+                type="submit"
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  Send invite
+                </span>
+              </button>
+            </form>
+
+            <div className="mt-4 space-y-2">
+              {invites.map((invite) => (
+                <div
+                  key={invite.id}
+                  className="flex items-center justify-between rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
+                >
+                  <p className="text-sm text-[#f7efdf]">{invite.email}</p>
+                  <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>
+                </div>
+              ))}
+              {invites.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No invites yet.</p> : null}
+            </div>
+          </section>
+
+          <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              <h2 className="font-serif text-3xl">Notifications</h2>
+            </div>
+            <div className="mt-4 space-y-2">
+              {notifications
+                .filter((n) => !groupId || String(n.group_id) === String(groupId))
+                .slice(0, 8)
+                .map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
+                  >
+                    <p className="text-sm text-[#f7efdf]">{notification.message}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{notification.kind}</p>
+                  </div>
+                ))}
+              {notifications.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No notifications.</p> : null}
             </div>
           </section>
         </section>
