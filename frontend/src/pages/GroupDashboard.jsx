@@ -328,7 +328,7 @@ export default function GroupDashboard() {
 
       <Navbar />
       <main className="relative z-10 mx-auto max-w-6xl space-y-6 px-6 pb-16 pt-6 md:pt-10">
-        <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+        <section className="dashboard-section group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-[#f0e4d0]/85">Group dashboard</p>
@@ -369,14 +369,14 @@ export default function GroupDashboard() {
             ["Approval status", metrics?.approvalStatus || "NOT_STARTED"],
             ["Members listed", members.length],
           ].map(([label, value]) => (
-            <div key={label} className="group-panel rounded-2xl border border-[#efe4d0]/35 p-4">
+            <div key={label} className="metric-tile p-4 transition">
               <p className="text-xs uppercase tracking-[0.16em] text-[#f0e4d0]/80">{label}</p>
               <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
             </div>
           ))}
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
+        <section className="dashboard-section grid gap-6 lg:grid-cols-2">
           <form
             onSubmit={submitPreferences}
             className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6 space-y-4"
@@ -487,7 +487,7 @@ export default function GroupDashboard() {
           </section>
         </section>
 
-        <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+        <section className="dashboard-section group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
           <h2 className="font-serif text-3xl">Itinerary</h2>
           <p className="mt-2 text-sm text-[#e8dcc8]/85">
             State: <span className="text-[#fff7ea]">{itinerary?.state || "NOT_CREATED"}</span>
@@ -558,7 +558,7 @@ export default function GroupDashboard() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
+        <section className="dashboard-section grid gap-6 lg:grid-cols-2">
           <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
             <h2 className="font-serif text-3xl">Pending join requests</h2>
             {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can manage requests.</p> : null}

@@ -55,7 +55,7 @@ export default function DashboardHome() {
 
       <Navbar />
       <main className="relative z-10 mx-auto max-w-6xl px-6 pb-16 pt-6 md:pt-10">
-        <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6 md:p-8">
+        <section className="dashboard-section group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6 md:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-[#f0e4d0]/85">Dashboard</p>
@@ -87,7 +87,7 @@ export default function DashboardHome() {
               <Link
                 key={group.id}
                 to={`/groups/${group.id}`}
-                className="block rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-4 transition hover:bg-[#141b25]/60"
+                className="trip-card block"
               >
                 <p className="text-xl text-[#fff7ea]">{group.name}</p>
                 <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">
@@ -102,7 +102,7 @@ export default function DashboardHome() {
             ))}
 
             {!loading && myGroups.length === 0 ? (
-              <div className="rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-5">
+              <div className="trip-card p-5">
                 <div className="inline-flex items-center gap-2 text-[#fff7ea]">
                   <Compass className="h-4 w-4" />
                   <p>No trips yet</p>

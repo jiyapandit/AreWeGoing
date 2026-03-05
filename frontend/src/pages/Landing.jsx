@@ -93,7 +93,7 @@ export default function Landing() {
         </ScrollExpansionHero>
 
         <section className="mx-auto max-w-6xl px-6 py-10">
-          <div className="liquid-panel rounded-[2rem] border border-white/20 p-6 md:p-8">
+          <div className="kinetic-banner p-6 md:p-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-serif text-3xl text-[#fff7ea] md:text-4xl">Dashboard & Planning Features</h3>
@@ -128,7 +128,7 @@ export default function Landing() {
                 ["Host Lock Controls", "Only host can lock final itinerary and stop further generation."],
                 ["Invites & Notifications", "Send invites, manage pending joins, and monitor updates."],
               ].map(([title, description]) => (
-                <div key={title} className="rounded-2xl border border-white/15 bg-black/20 p-4">
+                <div key={title} className="feature-grid-card">
                   <p className="text-lg text-[#fff7ea]">{title}</p>
                   <p className="mt-1 text-sm text-[#e8ddcc]/90">{description}</p>
                 </div>
