@@ -10,6 +10,8 @@ from app.modules.groups.schemas import (
     GroupMembersListResponse,
     GroupMetricsResponse,
     GroupResponse,
+    InviteRequest,
+    InviteResponse,
     JoinGroupRequest,
     JoinRequestResponse,
     UpdateMembershipStatusRequest,
@@ -21,8 +23,10 @@ from app.modules.groups.service import (
     get_group_metrics,
     get_user_groups,
     join_group,
+    list_group_invites,
     list_public_groups,
     request_join_public_group,
+    send_group_invite,
     update_membership_status,
 )
 
@@ -121,6 +125,44 @@ def members(group_id: int, db: Session = Depends(get_db), current_user: User = D
 def metrics(group_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         return GroupMetricsResponse(**get_group_metrics(db, group_id, current_user.id))
+    except ValueError as e:
+        if str(e) == "FORBIDDEN":
+            raise HTTPException(status_code=403, detail="Not a member of this group")
+        raise
+
+
+@router.post("/{group_id}/invites", response_model=InviteResponse, status_code=201)
+def create_invite(
+    group_id: int,
+    payload: InviteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        invite = send_group_invite(db, group_id, current_user.id, payload.email)
+        return InviteResponse(
+            id=invite.id,
+            group_id=invite.group_id,
+            email=invite.email,
+            status=invite.status,
+            created_at=invite.created_at,
+        )
+    except ValueError as e:
+        if str(e) == "FORBIDDEN":
+            raise HTTPException(status_code=403, detail="Only host can send invites")
+        if str(e) == "GROUP_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Group not found")
+        raise
+
+
+@router.get("/{group_id}/invites", response_model=list[InviteResponse])
+def get_invites(group_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        rows = list_group_invites(db, group_id, current_user.id)
+        return [
+            InviteResponse(id=row.id, group_id=row.group_id, email=row.email, status=row.status, created_at=row.created_at)
+            for row in rows
+        ]
     except ValueError as e:
         if str(e) == "FORBIDDEN":
             raise HTTPException(status_code=403, detail="Not a member of this group")

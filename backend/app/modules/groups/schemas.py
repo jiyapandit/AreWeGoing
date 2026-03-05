@@ -11,8 +11,8 @@ class GroupResponse(BaseModel):
     name: str
     is_public: bool
     join_code: str
-    created_by: int
-    created_at: datetime
+    created_by: int | None
+    created_at: datetime | None
 
 class JoinGroupRequest(BaseModel):
     join_code: str = Field(min_length=4, max_length=20)
@@ -49,3 +49,15 @@ class GroupMetricsResponse(BaseModel):
     conflictCount: int
     itineraryConfidenceScore: int
     approvalStatus: str
+
+
+class InviteRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+
+
+class InviteResponse(BaseModel):
+    id: int
+    group_id: int
+    email: str
+    status: Literal["SENT", "ACCEPTED", "REVOKED"]
+    created_at: datetime

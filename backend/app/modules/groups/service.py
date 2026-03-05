@@ -2,8 +2,12 @@ import secrets
 from sqlalchemy.orm import Session
 
 from db.models.group import Group
+from db.models.invite import Invite
 from db.models.membership import Membership
+from db.models.notification import Notification
 from db.models.preference import Preference
+from db.models.itinerary import Itinerary
+from db.models.vote import Vote
 from db.models.user import User
 
 
@@ -264,6 +268,16 @@ def get_group_metrics(db: Session, group_id: int, user_id: int):
         max(0, min(100, (completion_percent * 0.35) + (budget_alignment_score * 0.35) + (activity_match_score * 0.30) - (conflict_count * 10)))
     )
 
+    itinerary = db.query(Itinerary).filter(Itinerary.group_id == group_id).order_by(Itinerary.id.desc()).first()
+    approval_status = "NOT_STARTED"
+    if itinerary:
+        approval_status = itinerary.state
+        if itinerary.state == "REVIEW":
+            total_votes = db.query(Vote).filter(Vote.itinerary_id == itinerary.id).count()
+            approve_votes = db.query(Vote).filter(Vote.itinerary_id == itinerary.id, Vote.value == "APPROVE").count()
+            if total_votes > 0:
+                approval_status = f"REVIEW {approve_votes}/{total_votes} APPROVE"
+
     return {
         "group_id": group_id,
         "groupSize": group_size,
@@ -272,5 +286,51 @@ def get_group_metrics(db: Session, group_id: int, user_id: int):
         "activityMatchScore": activity_match_score,
         "conflictCount": conflict_count,
         "itineraryConfidenceScore": itinerary_confidence,
-        "approvalStatus": "NOT_STARTED",
+        "approvalStatus": approval_status,
     }
+
+
+def send_group_invite(db: Session, group_id: int, inviter_user_id: int, email: str):
+    membership = db.query(Membership).filter(
+        Membership.group_id == group_id,
+        Membership.user_id == inviter_user_id,
+        Membership.status == "ACTIVE",
+        Membership.role == "HOST",
+    ).first()
+    if not membership:
+        raise ValueError("FORBIDDEN")
+
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise ValueError("GROUP_NOT_FOUND")
+
+    invite = Invite(group_id=group_id, inviter_user_id=inviter_user_id, email=email.strip().lower(), status="SENT")
+    db.add(invite)
+
+    invited_user = db.query(User).filter(User.email == email.strip().lower()).first()
+    if invited_user:
+        db.add(
+            Notification(
+                user_id=invited_user.id,
+                group_id=group_id,
+                kind="GROUP_INVITE",
+                message=f'You were invited to join "{group.name}" ({group.join_code}).',
+            )
+        )
+
+    db.commit()
+    db.refresh(invite)
+    return invite
+
+
+def list_group_invites(db: Session, group_id: int, user_id: int):
+    membership = db.query(Membership).filter(
+        Membership.group_id == group_id,
+        Membership.user_id == user_id,
+        Membership.status == "ACTIVE",
+    ).first()
+    if not membership:
+        raise ValueError("FORBIDDEN")
+
+    rows = db.query(Invite).filter(Invite.group_id == group_id).order_by(Invite.created_at.desc()).all()
+    return rows

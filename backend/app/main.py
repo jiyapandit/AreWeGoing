@@ -3,11 +3,18 @@ from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from db.base import Base
 from db.session import engine
 from sqlalchemy import text
 from app.modules.auth.router import router as auth_router
 from app.modules.groups.router import router as groups_router
 from app.modules.preferences.router import router as preferences_router
+from app.modules.catalog.router import router as catalog_router
+from app.modules.itinerary.router import router as itinerary_router
+from app.modules.notifications.router import router as notifications_router
+from app.modules.catalog.service import seed_catalog_if_empty
+from db.models import User, Group, Membership, Preference, CatalogItem, Itinerary, ItineraryDay, ItineraryItem, Vote, Notification, Invite
 
 app = FastAPI(title="AreWeGoing API", version="0.1.0")
 
@@ -27,6 +34,19 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(groups_router, prefix="/api/v1/groups", tags=["Groups"])
 app.include_router(preferences_router)
+app.include_router(itinerary_router)
+app.include_router(catalog_router)
+app.include_router(notifications_router)
+
+
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
+    db = Session(engine)
+    try:
+        seed_catalog_if_empty(db)
+    finally:
+        db.close()
 
 
 @app.exception_handler(HTTPException)
