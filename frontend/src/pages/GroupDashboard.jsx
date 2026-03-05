@@ -1,7 +1,7 @@
 import axios from "axios";
 import { Bell, Mail, RefreshCcw, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 
 function getAccessToken() {
@@ -347,6 +347,12 @@ export default function GroupDashboard() {
                 Refresh
               </span>
             </button>
+            <Link
+              to="/dashboard"
+              className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-3 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
+            >
+              All trips
+            </Link>
           </div>
           {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
           {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}

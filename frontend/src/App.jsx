@@ -5,6 +5,7 @@ import Landing from "./pages/Landing";
 import CreateGroup from "./pages/CreateGroup";
 import JoinGroup from "./pages/JoinGroup";
 import GroupDashboard from "./pages/GroupDashboard";
+import DashboardHome from "./pages/DashboardHome";
 
 function isAuthenticated() {
   const localToken = window.localStorage.getItem("arewegoing_access_token");
@@ -44,6 +45,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <GroupDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardHome />
           </ProtectedRoute>
         }
       />

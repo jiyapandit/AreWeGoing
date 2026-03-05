@@ -82,11 +82,8 @@ export default function Landing() {
                 >
                   Join group
                 </Link>
-                {latestGroup ? (
-                  <Link
-                    to={`/groups/${latestGroup.id}`}
-                    className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]"
-                  >
+                {token ? (
+                  <Link to="/dashboard" className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]">
                     Open dashboard
                   </Link>
                 ) : null}
@@ -106,10 +103,10 @@ export default function Landing() {
               </div>
               {latestGroup ? (
                 <Link
-                  to={`/groups/${latestGroup.id}`}
+                  to="/dashboard"
                   className="liquid-chip rounded-2xl border border-white/20 px-4 py-2 text-[#fff8eb]"
                 >
-                  Continue: {latestGroup.name}
+                  Continue: {latestGroup.name} and others
                 </Link>
               ) : token ? (
                 <Link to="/create-group" className="liquid-chip rounded-2xl border border-white/20 px-4 py-2 text-[#fff8eb]">
