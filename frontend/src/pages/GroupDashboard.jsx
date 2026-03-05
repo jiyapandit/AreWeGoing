@@ -252,6 +252,32 @@ export default function GroupDashboard() {
     }
   }
 
+  async function updatePendingMembership(membershipId, nextStatus) {
+    setErrorMessage("");
+    setSuccessMessage("");
+    if (!isHost) {
+      setErrorMessage("Only host can update join requests.");
+      return;
+    }
+    try {
+      await axios.patch(
+        `${groupsApiBaseUrl}/${groupId}/members/${membershipId}/status`,
+        { status: nextStatus },
+        { headers: authHeaders }
+      );
+      setSuccessMessage(`Request ${nextStatus === "ACTIVE" ? "approved" : "rejected"}.`);
+      await refreshDashboard();
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        setErrorMessage("Only host can update membership status.");
+      } else if (error?.response?.status === 404) {
+        setErrorMessage("Membership request not found.");
+      } else {
+        setErrorMessage("Could not update request.");
+      }
+    }
+  }
+
   async function submitPreferences(event) {
     event.preventDefault();
     setSaving(true);
@@ -527,6 +553,47 @@ export default function GroupDashboard() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
+          <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+            <h2 className="font-serif text-3xl">Pending join requests</h2>
+            {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can manage requests.</p> : null}
+            <div className="mt-4 space-y-2">
+              {members
+                .filter((member) => member.status === "PENDING")
+                .map((member) => (
+                  <div
+                    key={member.membership_id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
+                  >
+                    <div>
+                      <p className="text-sm text-[#f7efdf]">{member.email}</p>
+                      <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{member.role}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={!isHost}
+                        onClick={() => updatePendingMembership(member.membership_id, "ACTIVE")}
+                        className="rounded-lg border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-100 disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!isHost}
+                        onClick={() => updatePendingMembership(member.membership_id, "REJECTED")}
+                        className="rounded-lg border border-rose-300/30 bg-rose-500/15 px-3 py-1 text-xs text-rose-100 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              {members.filter((member) => member.status === "PENDING").length === 0 ? (
+                <p className="text-sm text-[#e8dbc7]/80">No pending requests.</p>
+              ) : null}
+            </div>
+          </section>
+
           <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
             <h2 className="font-serif text-3xl">Invite friends</h2>
             <form onSubmit={sendInvite} className="mt-4 flex flex-wrap gap-2">

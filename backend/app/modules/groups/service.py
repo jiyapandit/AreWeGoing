@@ -194,6 +194,7 @@ def get_group_members(db: Session, group_id: int, user_id: int):
         "group_id": group_id,
         "members": [
             {
+                "membership_id": member.id,
                 "id": user.id,
                 "email": user.email,
                 "role": member.role,
