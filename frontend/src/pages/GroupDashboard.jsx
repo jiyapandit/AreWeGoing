@@ -37,6 +37,7 @@ export default function GroupDashboard() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [invites, setInvites] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -47,6 +48,14 @@ export default function GroupDashboard() {
   );
 
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${authToken}` }), [authToken]);
+  const authApiBaseUrl = useMemo(
+    () => (rawApiBaseUrl.endsWith("/api/v1") ? `${rawApiBaseUrl}/auth` : `${rawApiBaseUrl}/api/v1/auth`),
+    [rawApiBaseUrl]
+  );
+  const isHost = useMemo(
+    () => members.some((member) => member.id === currentUserId && member.role === "HOST" && member.status === "ACTIVE"),
+    [members, currentUserId]
+  );
 
   useEffect(() => {
     if (!authToken) {
@@ -59,7 +68,7 @@ export default function GroupDashboard() {
       setLoading(true);
       setErrorMessage("");
       try {
-        const [groupRes, membersRes, statusRes, metricsRes, invitesRes, notificationsRes] = await Promise.all([
+        const [groupRes, membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
           axios.get(`${groupsApiBaseUrl}/${groupId}`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
@@ -68,6 +77,7 @@ export default function GroupDashboard() {
           axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
             headers: authHeaders,
           }),
+          axios.get(`${authApiBaseUrl}/me`, { headers: authHeaders }),
         ]);
         if (!isMounted) return;
         setGroup(groupRes.data);
@@ -76,6 +86,7 @@ export default function GroupDashboard() {
         setMetrics(metricsRes.data);
         setInvites(invitesRes.data || []);
         setNotifications(notificationsRes.data || []);
+        setCurrentUserId(meRes.data?.id || null);
         try {
           const itineraryRes = await axios.get(`${groupsApiBaseUrl}/${groupId}/itinerary`, { headers: authHeaders });
           setItinerary(itineraryRes.data);
@@ -120,14 +131,14 @@ export default function GroupDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [authHeaders, authToken, groupId, groupsApiBaseUrl, navigate, rawApiBaseUrl]);
+  }, [authApiBaseUrl, authHeaders, authToken, groupId, groupsApiBaseUrl, navigate, rawApiBaseUrl]);
 
   async function refreshDashboard() {
     setSuccessMessage("");
     setErrorMessage("");
     setLoading(true);
     try {
-      const [membersRes, statusRes, metricsRes, invitesRes, notificationsRes] = await Promise.all([
+      const [membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
         axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/metrics`, { headers: authHeaders }),
@@ -135,12 +146,14 @@ export default function GroupDashboard() {
         axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
           headers: authHeaders,
         }),
+        axios.get(`${authApiBaseUrl}/me`, { headers: authHeaders }),
       ]);
       setMembers(membersRes.data?.members || []);
       setStatus(statusRes.data);
       setMetrics(metricsRes.data);
       setInvites(invitesRes.data || []);
       setNotifications(notificationsRes.data || []);
+      setCurrentUserId(meRes.data?.id || null);
       try {
         const itineraryRes = await axios.get(`${groupsApiBaseUrl}/${groupId}/itinerary`, { headers: authHeaders });
         setItinerary(itineraryRes.data);
@@ -199,6 +212,10 @@ export default function GroupDashboard() {
   async function lockItineraryNow() {
     setErrorMessage("");
     setSuccessMessage("");
+    if (!isHost) {
+      setErrorMessage("Only host can lock itinerary.");
+      return;
+    }
     try {
       const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/lock`, {}, { headers: authHeaders });
       setItinerary(data);
@@ -473,13 +490,19 @@ export default function GroupDashboard() {
             >
               Vote
             </button>
-            <button
-              type="button"
-              onClick={lockItineraryNow}
-              className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
-            >
-              Lock (Host)
-            </button>
+            {isHost ? (
+              <button
+                type="button"
+                onClick={lockItineraryNow}
+                className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
+              >
+                Lock (Host)
+              </button>
+            ) : (
+              <span className="rounded-xl border border-[#f3e7d4]/20 bg-[#11151c]/25 px-4 py-2 text-sm text-[#bfb39f]">
+                Lock available to host only
+              </span>
+            )}
           </div>
 
           <div className="mt-4 space-y-3">
@@ -516,6 +539,7 @@ export default function GroupDashboard() {
               />
               <button
                 type="submit"
+                disabled={!isHost}
                 className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
               >
                 <span className="inline-flex items-center gap-2">
@@ -524,6 +548,7 @@ export default function GroupDashboard() {
                 </span>
               </button>
             </form>
+            {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can send invites.</p> : null}
 
             <div className="mt-4 space-y-2">
               {invites.map((invite) => (
