@@ -35,6 +35,18 @@ export default function Landing() {
                 <Link to="/login" className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#efe3d1]">
                   Sign in
                 </Link>
+                <Link
+                  to="/create-group"
+                  className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]"
+                >
+                  Create group
+                </Link>
+                <Link
+                  to="/join-group"
+                  className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#efe3d1]"
+                >
+                  Join group
+                </Link>
               </div>
             </div>
           </div>
