@@ -3,6 +3,7 @@ import { Compass, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import { CustomColorDemo, DefaultDemo } from "@/components/ui/expandable-tabs-demo";
 
 function getAccessToken() {
   return (
@@ -81,6 +82,17 @@ export default function DashboardHome() {
           </div>
 
           {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
+
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-4">
+              <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Quick Controls</p>
+              <DefaultDemo />
+            </div>
+            <div className="rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-4">
+              <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Workspace</p>
+              <CustomColorDemo />
+            </div>
+          </div>
 
           <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {myGroups.map((group) => (
