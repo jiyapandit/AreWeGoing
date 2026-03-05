@@ -8,6 +8,7 @@ import HowItWorks from "../components/HowItWorks";
 import SampleTrip from "../components/SampleTrip";
 import Footer from "../components/Footer";
 import ScrollExpansionHero from "../components/ui/scroll-expansion-hero";
+import HeroShaderDemo from "../components/ui/hero-section-with-smooth-bg-shader-demo";
 
 export default function Landing() {
   const [myGroups, setMyGroups] = useState([]);
@@ -136,6 +137,12 @@ export default function Landing() {
             </div>
 
             {myGroupsError ? <p className="mt-4 text-sm text-[#ffcfbf]">{myGroupsError}</p> : null}
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-6 pb-12">
+          <div className="overflow-hidden rounded-[2rem] border border-white/15">
+            <HeroShaderDemo />
           </div>
         </section>
 
