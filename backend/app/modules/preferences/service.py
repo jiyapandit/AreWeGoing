@@ -7,7 +7,7 @@ def upsert_preferences(db: Session, group_id: int, user_id: int, payload):
         Membership.group_id == group_id,
         Membership.user_id == user_id
     ).first()
-    if not membership:
+    if not membership or membership.status != "ACTIVE":
         return None  # router will convert to 403
 
     pref = db.query(Preference).filter(
@@ -37,7 +37,7 @@ def get_my_preferences(db: Session, group_id: int, user_id: int):
         Membership.group_id == group_id,
         Membership.user_id == user_id
     ).first()
-    if not membership:
+    if not membership or membership.status != "ACTIVE":
         return None
 
     return db.query(Preference).filter(
@@ -47,7 +47,8 @@ def get_my_preferences(db: Session, group_id: int, user_id: int):
 
 def get_preferences_status(db: Session, group_id: int):
     members = db.query(Membership, User).join(User, User.id == Membership.user_id).filter(
-        Membership.group_id == group_id
+        Membership.group_id == group_id,
+        Membership.status == "ACTIVE",
     ).all()
 
     member_rows = []

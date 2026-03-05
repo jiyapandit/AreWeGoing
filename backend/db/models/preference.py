@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON, Column, Integer, String, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
 
 from db.base import Base
@@ -19,10 +18,10 @@ class Preference(Base):
 
     days = Column(Integer, nullable=True)
 
-    activities = Column(JSONB, nullable=False, default=list)          # list[str]
+    activities = Column(JSON, nullable=False, default=list)          # list[str]
     transport_mode = Column(String(40), nullable=True)
 
-    dietary_preferences = Column(JSONB, nullable=False, default=list) # list[str]
+    dietary_preferences = Column(JSON, nullable=False, default=list) # list[str]
     travel_pace = Column(String(30), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
