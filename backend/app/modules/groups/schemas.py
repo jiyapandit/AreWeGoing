@@ -19,6 +19,7 @@ class JoinGroupRequest(BaseModel):
 
 
 class GroupMemberResponse(BaseModel):
+    membership_id: int
     id: int
     email: str
     role: str

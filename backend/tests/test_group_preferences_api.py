@@ -73,3 +73,37 @@ def test_groups_preferences_status_codes(client):
     members_ok = client.get(f"/api/v1/groups/{group_id}/members", headers=host_headers)
     assert members_ok.status_code == 200
     assert len(members_ok.json()["members"]) == 2
+
+
+def test_public_join_request_host_approve_reject(client):
+    host_headers = register_and_login(client, "host2@example.com")
+    requester_headers = register_and_login(client, "requester@example.com")
+    outsider_headers = register_and_login(client, "outsider2@example.com")
+
+    created = client.post("/api/v1/groups", json={"name": "Public Trip", "is_public": True}, headers=host_headers)
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+
+    join_request = client.post(f"/api/v1/groups/{group_id}/join-request", headers=requester_headers)
+    assert join_request.status_code == 201
+    membership_id = join_request.json()["membership_id"]
+
+    non_host_update = client.patch(
+        f"/api/v1/groups/{group_id}/members/{membership_id}/status",
+        json={"status": "ACTIVE"},
+        headers=outsider_headers,
+    )
+    assert non_host_update.status_code == 403
+
+    host_approve = client.patch(
+        f"/api/v1/groups/{group_id}/members/{membership_id}/status",
+        json={"status": "ACTIVE"},
+        headers=host_headers,
+    )
+    assert host_approve.status_code == 200
+    assert host_approve.json()["status"] == "ACTIVE"
+
+    members = client.get(f"/api/v1/groups/{group_id}/members", headers=host_headers)
+    assert members.status_code == 200
+    pending = [m for m in members.json()["members"] if m["status"] == "PENDING"]
+    assert len(pending) == 0

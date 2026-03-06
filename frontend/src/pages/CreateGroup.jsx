@@ -117,6 +117,8 @@ export default function CreateGroup() {
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
       <div className="group-bg-gradient-create absolute inset-0" />
+      <div className="scene-photo-wash-create absolute inset-0 opacity-45" />
+      <div className="group-cinematic-vignette absolute inset-0" />
       <div className="group-orb-a absolute -left-28 top-10 h-[24rem] w-[24rem] rounded-full login-float-slow" />
       <div className="group-orb-b absolute -right-24 bottom-12 h-[26rem] w-[26rem] rounded-full login-float-fast" />
       <div className="absolute inset-0 grain" />
@@ -124,31 +126,35 @@ export default function CreateGroup() {
       <Navbar />
 
       <main className="relative z-10 mx-auto max-w-5xl px-6 pb-16 pt-6 md:pt-10">
-        <section className="group-panel mx-auto w-full max-w-3xl rounded-[2rem] border border-[#efe4d0]/35 p-6 md:p-9">
+        <section className="group-panel group-panel-create relative mx-auto w-full max-w-3xl overflow-hidden rounded-[2rem] border border-white/30 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.28)] md:p-9">
+          <div className="pointer-events-none absolute -left-16 -top-16 h-44 w-44 rounded-full bg-white/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -right-10 h-52 w-52 rounded-full bg-sky-200/15 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/16 via-white/6 to-transparent" />
+          <div className="relative z-10">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#efe4d0]/35 bg-black/20 px-3 py-1 text-xs uppercase tracking-[0.16em] text-[#f4ebda]/90">
             <Sparkles className="h-3.5 w-3.5" />
             Start a trip room
           </div>
           <h1 className="mt-5 font-serif text-4xl leading-tight md:text-5xl">Create your group</h1>
-          <p className="mt-3 max-w-xl text-sm text-[#e8dcc8]/90 md:text-base">
+          <p className="mt-3 max-w-xl text-sm text-[#f1e7d7] md:text-base">
             Create once, then invite friends by sending the generated code or link.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <label className="block">
-              <span className="text-xs uppercase tracking-[0.18em] text-[#eadfcf]/80">Group name</span>
+              <span className="text-xs uppercase tracking-[0.18em] text-[#f1e7d7]/90">Group name</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Summer Escape 2026"
-                className="mt-2 w-full rounded-2xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-4 py-3 text-[#f8f2e7] outline-none transition focus:border-[#f4ebda]/70 focus:ring-2 focus:ring-[#f4ebda]/20"
+                className="mt-2 w-full rounded-2xl border border-white/35 bg-white/10 px-4 py-3 text-[#fff8ec] outline-none transition focus:border-[#f4ebda]/70 focus:ring-2 focus:ring-[#f4ebda]/20"
                 required
                 minLength={2}
                 maxLength={120}
               />
             </label>
 
-            <label className="inline-flex items-center gap-3 text-sm text-[#ecdfcc]/95">
+            <label className="inline-flex items-center gap-3 text-sm text-[#f1e7d7]">
               <input
                 id="isPublic"
                 type="checkbox"
@@ -173,7 +179,7 @@ export default function CreateGroup() {
               <button
                 type="button"
                 onClick={() => navigate("/landing")}
-                className="rounded-2xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-5 py-3 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60 md:text-base"
+                className="rounded-2xl border border-white/30 bg-white/10 px-5 py-3 text-sm text-[#efe3d1] transition hover:bg-white/20 md:text-base"
               >
                 Back to Landing
               </button>
@@ -181,10 +187,10 @@ export default function CreateGroup() {
           </form>
 
           {group ? (
-            <div className="mt-8 space-y-4 rounded-2xl border border-[#f1e6d6]/30 bg-[#0f1319]/55 p-4">
+            <div className="mt-8 space-y-4 rounded-2xl border border-white/25 bg-white/8 p-4 backdrop-blur-xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#e8dbc7]/75">Join code</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#f1e7d7]/90">Join code</p>
                   <p className="text-2xl tracking-[0.2em] text-[#fff7ea]">{group.join_code}</p>
                 </div>
                 <div className="flex gap-2">
@@ -209,14 +215,14 @@ export default function CreateGroup() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-[0.18em] text-[#eadfcf]/80">Invite friend by email</label>
+                <label className="text-xs uppercase tracking-[0.18em] text-[#f1e7d7]/90">Invite friend by email</label>
                 <div className="flex flex-wrap gap-2">
                   <input
                     type="email"
                     placeholder="friend@example.com"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    className="min-w-[14rem] flex-1 rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none"
+                    className="min-w-[14rem] flex-1 rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-[#fff8ec] outline-none"
                   />
                   <button
                     type="button"
@@ -235,9 +241,10 @@ export default function CreateGroup() {
 
           {errorMessage ? <p className="mt-5 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
           {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}
+          </div>
         </section>
 
-        <div className="mx-auto mt-7 flex max-w-3xl flex-wrap items-center gap-3 text-sm text-[#e8dcc8]/85">
+        <div className="mx-auto mt-7 flex max-w-3xl flex-wrap items-center gap-3 text-sm text-[#f1e7d7]">
           <span>Already have a code?</span>
           <button
             type="button"
