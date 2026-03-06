@@ -42,6 +42,8 @@ export default function GroupDashboard() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [memberStatusFilter, setMemberStatusFilter] = useState("ALL");
   const [membershipActionId, setMembershipActionId] = useState(null);
+  const [inviteStatusFilter, setInviteStatusFilter] = useState("ALL");
+  const [inviteActionId, setInviteActionId] = useState(null);
   const [toast, setToast] = useState({ message: "", type: "info" });
 
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -70,6 +72,10 @@ export default function GroupDashboard() {
     () => notifications.filter((n) => !groupId || String(n.group_id) === String(groupId)).slice(0, 4),
     [notifications, groupId]
   );
+  const visibleInvites = useMemo(() => {
+    if (inviteStatusFilter === "ALL") return invites;
+    return invites.filter((invite) => invite.status === inviteStatusFilter);
+  }, [invites, inviteStatusFilter]);
   const itineraryState = itinerary?.state || "NOT_CREATED";
   const canGenerateItinerary = itineraryState === "NOT_CREATED" || itineraryState === "DRAFT";
   const canMoveToReview = itineraryState === "DRAFT";
@@ -269,6 +275,34 @@ export default function GroupDashboard() {
       } else {
         setToast({ message: "Could not send invite.", type: "error" });
       }
+    }
+  }
+
+  async function resendInvite(invite) {
+    setToast({ message: "", type: "info" });
+    if (!isHost) {
+      setToast({ message: "Only host can resend invites.", type: "error" });
+      return;
+    }
+    setInviteActionId(invite.id);
+    try {
+      await axios.post(
+        `${groupsApiBaseUrl}/${groupId}/invites`,
+        { email: invite.email },
+        { headers: authHeaders }
+      );
+      setToast({ message: `Invite resent to ${invite.email}.`, type: "success" });
+      await refreshDashboard();
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        setToast({ message: "Only host can resend invites.", type: "error" });
+      } else if (error?.response?.status === 404) {
+        setToast({ message: "Group not found.", type: "error" });
+      } else {
+        setToast({ message: "Could not resend invite.", type: "error" });
+      }
+    } finally {
+      setInviteActionId(null);
     }
   }
 
@@ -740,14 +774,57 @@ export default function GroupDashboard() {
             {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can send invites.</p> : null}
 
             <div className="mt-4 space-y-2">
-              <h3 className="text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Recent invites</h3>
-              {invites.slice(0, 4).map((invite) => (
-                <div key={invite.id} className="flex items-center justify-between rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2">
-                  <p className="truncate text-sm text-[#f7efdf]">{invite.email}</p>
-                  <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Recent invites</h3>
+                <div className="flex flex-wrap gap-1.5 text-[11px] uppercase tracking-[0.12em]">
+                  {["ALL", "SENT", "ACCEPTED", "REVOKED"].map((statusKey) => (
+                    <button
+                      key={statusKey}
+                      type="button"
+                      onClick={() => setInviteStatusFilter(statusKey)}
+                      className={`rounded-md border px-2 py-1 transition ${
+                        inviteStatusFilter === statusKey
+                          ? "border-white/45 bg-white/16 text-[#fff7ea]"
+                          : "border-white/20 bg-white/5 text-[#e8dbc7]/85 hover:bg-white/12"
+                      }`}
+                    >
+                      {statusKey}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {visibleInvites.slice(0, 6).map((invite) => (
+                <div
+                  key={invite.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-[#f7efdf]">{invite.email}</p>
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-[#e8dbc7]/70">
+                      {new Date(invite.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>
+                    <button
+                      type="button"
+                      disabled={!isHost || inviteActionId === invite.id}
+                      onClick={() => resendInvite(invite)}
+                      className="rounded-md border border-[#f3e7d4]/25 bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {inviteActionId === invite.id ? "Resending..." : "Resend"}
+                    </button>
+                  </div>
                 </div>
               ))}
-              {invites.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No invites yet.</p> : null}
+              {visibleInvites.length === 0 ? (
+                <p className="text-sm text-[#e8dbc7]/80">
+                  {invites.length === 0 ? "No invites yet." : "No invites in selected status."}
+                </p>
+              ) : null}
+              <p className="text-[11px] text-[#c9bea9]/75">
+                Cancel/revoke invite action will be enabled after backend revoke endpoint is added.
+              </p>
             </div>
           </section>
         </section>
