@@ -48,6 +48,8 @@ class GroupMetricsResponse(BaseModel):
     budgetAlignmentScore: int
     activityMatchScore: int
     conflictCount: int
+    budgetConflict: bool
+    transportConflict: bool
     itineraryConfidenceScore: int
     approvalStatus: str
 
@@ -61,4 +63,33 @@ class InviteResponse(BaseModel):
     group_id: int
     email: str
     status: Literal["SENT", "ACCEPTED", "REVOKED"]
+    delivery_status: Literal["PENDING", "DELIVERED", "FAILED", "BOUNCED"]
+    delivery_provider: str | None
+    delivery_provider_id: str | None
+    delivery_attempts: int
+    delivery_last_error: str | None
     created_at: datetime
+
+
+class UpdateInviteStatusRequest(BaseModel):
+    status: Literal["REVOKED"]
+
+
+class UserInviteResponse(BaseModel):
+    id: int
+    group_id: int
+    group_name: str
+    join_code: str
+    inviter_user_id: int
+    email: str
+    status: Literal["SENT", "ACCEPTED", "REVOKED"]
+    delivery_status: Literal["PENDING", "DELIVERED", "FAILED", "BOUNCED"]
+    created_at: datetime
+
+
+class InviteDeliveryWebhookRequest(BaseModel):
+    invite_id: int
+    status: Literal["DELIVERED", "FAILED", "BOUNCED"]
+    provider: str | None = None
+    provider_message_id: str | None = None
+    error_message: str | None = None

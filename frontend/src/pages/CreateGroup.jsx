@@ -3,6 +3,7 @@ import { Copy, Mail, Sparkles, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import AppToast from "@/components/ui/app-toast";
 
 function getAccessToken() {
   return (
@@ -17,8 +18,7 @@ export default function CreateGroup() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [group, setGroup] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [toast, setToast] = useState({ message: "", type: "info" });
 
   const authToken = getAccessToken();
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -31,11 +31,10 @@ export default function CreateGroup() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
 
     if (!authToken) {
-      setErrorMessage("Please sign in first to create a group.");
+      setToast({ message: "Please sign in first to create a group.", type: "error" });
       return;
     }
 
@@ -47,17 +46,23 @@ export default function CreateGroup() {
         { headers: { Authorization: `Bearer ${authToken}` }, timeout: 10000 }
       );
       setGroup(data);
-      setSuccessMessage("Group created. Invite your friends using the code below.");
+      setToast({ message: "Group created successfully.", type: "success" });
       navigate(`/groups/${data.id}`);
     } catch (error) {
       if (error?.response?.status === 401) {
-        setErrorMessage("Session expired. Please sign in again.");
+        setToast({ message: "Session expired. Please sign in again.", type: "error" });
+      } else if (error?.response?.status === 403) {
+        setToast({ message: "You do not have permission to create a group.", type: "error" });
+      } else if (error?.response?.status === 404) {
+        setToast({ message: "Groups service not found.", type: "error" });
+      } else if (error?.response?.status === 409) {
+        setToast({ message: "A group with this setup already exists. Try a different name.", type: "error" });
       } else if (error?.response?.status === 422) {
-        setErrorMessage("Group name must be between 2 and 120 characters.");
+        setToast({ message: "Group name must be between 2 and 120 characters.", type: "error" });
       } else if (error?.response?.status === 400) {
-        setErrorMessage(error?.response?.data?.message || "Invalid request.");
+        setToast({ message: error?.response?.data?.message || "Invalid request.", type: "error" });
       } else {
-        setErrorMessage("Could not create group right now. Please try again.");
+        setToast({ message: "Could not create group right now. Please try again.", type: "error" });
       }
     } finally {
       setIsSubmitting(false);
@@ -68,9 +73,9 @@ export default function CreateGroup() {
     if (!group?.join_code) return;
     try {
       await navigator.clipboard.writeText(group.join_code);
-      setSuccessMessage("Join code copied.");
+      setToast({ message: "Join code copied.", type: "success" });
     } catch {
-      setErrorMessage("Copy failed. Please copy the code manually.");
+      setToast({ message: "Copy failed. Please copy the code manually.", type: "error" });
     }
   }
 
@@ -78,20 +83,21 @@ export default function CreateGroup() {
     if (!inviteUrl) return;
     try {
       await navigator.clipboard.writeText(inviteUrl);
-      setSuccessMessage("Invite link copied.");
+      setToast({ message: "Invite link copied.", type: "success" });
     } catch {
-      setErrorMessage("Copy failed. Please copy the invite link manually.");
+      setToast({ message: "Copy failed. Please copy the invite link manually.", type: "error" });
     }
   }
 
   async function sendInvite() {
     if (!group?.join_code) return;
+    setToast({ message: "", type: "info" });
     if (inviteEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) {
-      setErrorMessage("Please enter a valid friend email.");
+      setToast({ message: "Please enter a valid friend email.", type: "error" });
       return;
     }
     if (!inviteEmail.trim()) {
-      setErrorMessage("Enter an email to send invite.");
+      setToast({ message: "Enter an email to send invite.", type: "error" });
       return;
     }
 
@@ -101,21 +107,30 @@ export default function CreateGroup() {
         { email: inviteEmail.trim().toLowerCase() },
         { headers: { Authorization: `Bearer ${authToken}` }, timeout: 10000 }
       );
-      setSuccessMessage("Invite sent.");
+      setToast({ message: "Invite sent.", type: "success" });
       setInviteEmail("");
     } catch (error) {
-      if (error?.response?.status === 403) {
-        setErrorMessage("Only host can send invites.");
+      if (error?.response?.status === 401) {
+        setToast({ message: "Session expired. Please sign in again.", type: "error" });
+      } else if (error?.response?.status === 409) {
+        setToast({ message: "Invite already exists for this email.", type: "error" });
+      } else if (error?.response?.status === 403) {
+        setToast({ message: "Only host can send invites.", type: "error" });
       } else if (error?.response?.status === 404) {
-        setErrorMessage("Group not found.");
+        setToast({ message: "Group not found.", type: "error" });
       } else {
-        setErrorMessage("Could not send invite.");
+        setToast({ message: "Could not send invite.", type: "error" });
       }
     }
   }
 
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
+      <AppToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "info" })}
+      />
       <div className="group-bg-gradient-create absolute inset-0" />
       <div className="scene-photo-wash-create absolute inset-0 opacity-45" />
       <div className="group-cinematic-vignette absolute inset-0" />
@@ -239,8 +254,6 @@ export default function CreateGroup() {
             </div>
           ) : null}
 
-          {errorMessage ? <p className="mt-5 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
-          {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}
           </div>
         </section>
 

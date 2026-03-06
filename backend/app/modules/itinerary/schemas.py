@@ -24,6 +24,7 @@ class ItineraryResponse(BaseModel):
     confidence_score: int
     created_by: int
     created_at: datetime
+    vote_summary: dict[str, int]
     days: list[ItineraryDayResponse]
 
 

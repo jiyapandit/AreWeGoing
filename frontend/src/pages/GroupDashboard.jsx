@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, CheckCircle2, Home, Mail, RefreshCcw, Users } from
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import AppToast from "@/components/ui/app-toast";
 import { FluidDropdown } from "@/components/ui/fluid-dropdown";
 
 function getAccessToken() {
@@ -39,8 +40,12 @@ export default function GroupDashboard() {
   const [invites, setInvites] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [memberStatusFilter, setMemberStatusFilter] = useState("ALL");
+  const [membershipActionId, setMembershipActionId] = useState(null);
+  const [inviteStatusFilter, setInviteStatusFilter] = useState("ALL");
+  const [inviteActionId, setInviteActionId] = useState(null);
+  const [readingNotificationId, setReadingNotificationId] = useState(null);
+  const [toast, setToast] = useState({ message: "", type: "info" });
 
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
   const groupsApiBaseUrl = useMemo(
@@ -58,10 +63,24 @@ export default function GroupDashboard() {
     [members, currentUserId]
   );
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "PENDING"), [members]);
+  const activeMembers = useMemo(() => members.filter((member) => member.status === "ACTIVE"), [members]);
+  const rejectedMembers = useMemo(() => members.filter((member) => member.status === "REJECTED"), [members]);
+  const visibleMembers = useMemo(() => {
+    if (memberStatusFilter === "ALL") return members;
+    return members.filter((member) => member.status === memberStatusFilter);
+  }, [members, memberStatusFilter]);
   const filteredNotifications = useMemo(
     () => notifications.filter((n) => !groupId || String(n.group_id) === String(groupId)).slice(0, 4),
     [notifications, groupId]
   );
+  const unreadNotifications = useMemo(
+    () => filteredNotifications.filter((notification) => !notification.is_read).length,
+    [filteredNotifications]
+  );
+  const visibleInvites = useMemo(() => {
+    if (inviteStatusFilter === "ALL") return invites;
+    return invites.filter((invite) => invite.status === inviteStatusFilter);
+  }, [invites, inviteStatusFilter]);
   const itineraryState = itinerary?.state || "NOT_CREATED";
   const canGenerateItinerary = itineraryState === "NOT_CREATED" || itineraryState === "DRAFT";
   const canMoveToReview = itineraryState === "DRAFT";
@@ -84,7 +103,7 @@ export default function GroupDashboard() {
     let isMounted = true;
     async function loadGroupData() {
       setLoading(true);
-      setErrorMessage("");
+      setToast({ message: "", type: "info" });
       try {
         const [groupRes, membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
           axios.get(`${groupsApiBaseUrl}/${groupId}`, { headers: authHeaders }),
@@ -114,11 +133,11 @@ export default function GroupDashboard() {
       } catch (error) {
         if (!isMounted) return;
         if (error?.response?.status === 403) {
-          setErrorMessage("You do not have access to this group.");
+          setToast({ message: "You do not have access to this group.", type: "error" });
         } else if (error?.response?.status === 404) {
-          setErrorMessage("Group not found.");
+          setToast({ message: "Group not found.", type: "error" });
         } else {
-          setErrorMessage("Could not load group dashboard.");
+          setToast({ message: "Could not load group dashboard.", type: "error" });
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -152,8 +171,7 @@ export default function GroupDashboard() {
   }, [authApiBaseUrl, authHeaders, authToken, groupId, groupsApiBaseUrl, navigate, rawApiBaseUrl]);
 
   async function refreshDashboard() {
-    setSuccessMessage("");
-    setErrorMessage("");
+    setToast({ message: "", type: "info" });
     setLoading(true);
     try {
       const [membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
@@ -179,77 +197,72 @@ export default function GroupDashboard() {
         setItinerary(null);
       }
     } catch {
-      setErrorMessage("Could not refresh dashboard data.");
+      setToast({ message: "Could not refresh dashboard data.", type: "error" });
     } finally {
       setLoading(false);
     }
   }
 
   async function generateItinerary() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/generate`, {}, { headers: authHeaders });
       setItinerary(data);
-      setSuccessMessage("Itinerary draft generated.");
+      setToast({ message: "Itinerary draft generated.", type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 409) {
-        setErrorMessage(error?.response?.data?.message || "Cannot generate itinerary.");
+        setToast({ message: error?.response?.data?.message || "Cannot generate itinerary.", type: "error" });
       } else {
-        setErrorMessage("Could not generate itinerary.");
+        setToast({ message: "Could not generate itinerary.", type: "error" });
       }
     }
   }
 
   async function moveToReview() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/review`, {}, { headers: authHeaders });
       setItinerary(data);
-      setSuccessMessage("Itinerary moved to review.");
+      setToast({ message: "Itinerary moved to review.", type: "success" });
       await refreshDashboard();
     } catch (error) {
-      setErrorMessage(error?.response?.data?.message || "Could not move itinerary to review.");
+      setToast({ message: error?.response?.data?.message || "Could not move itinerary to review.", type: "error" });
     }
   }
 
   async function voteItinerary() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       await axios.post(`${groupsApiBaseUrl}/${groupId}/vote`, { value: voteValue }, { headers: authHeaders });
-      setSuccessMessage("Vote submitted.");
+      setToast({ message: "Vote submitted.", type: "success" });
       await refreshDashboard();
     } catch (error) {
-      setErrorMessage(error?.response?.data?.message || "Could not submit vote.");
+      setToast({ message: error?.response?.data?.message || "Could not submit vote.", type: "error" });
     }
   }
 
   async function lockItineraryNow() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     if (!isHost) {
-      setErrorMessage("Only host can lock itinerary.");
+      setToast({ message: "Only host can lock itinerary.", type: "error" });
       return;
     }
     try {
       const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/lock`, {}, { headers: authHeaders });
       setItinerary(data);
-      setSuccessMessage("Itinerary locked.");
+      setToast({ message: "Itinerary locked.", type: "success" });
       await refreshDashboard();
     } catch (error) {
-      setErrorMessage(error?.response?.data?.message || "Could not lock itinerary.");
+      setToast({ message: error?.response?.data?.message || "Could not lock itinerary.", type: "error" });
     }
   }
 
   async function sendInvite(event) {
     event.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     if (!inviteEmail.trim()) {
-      setErrorMessage("Enter email to invite.");
+      setToast({ message: "Enter email to invite.", type: "error" });
       return;
     }
     try {
@@ -259,48 +272,107 @@ export default function GroupDashboard() {
         { headers: authHeaders }
       );
       setInviteEmail("");
-      setSuccessMessage("Invite sent.");
+      setToast({ message: "Invite sent.", type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 403) {
-        setErrorMessage("Only host can send invites.");
+        setToast({ message: "Only host can send invites.", type: "error" });
       } else {
-        setErrorMessage("Could not send invite.");
+        setToast({ message: "Could not send invite.", type: "error" });
       }
     }
   }
 
-  async function updatePendingMembership(membershipId, nextStatus) {
-    setErrorMessage("");
-    setSuccessMessage("");
+  async function resendInvite(invite) {
+    setToast({ message: "", type: "info" });
     if (!isHost) {
-      setErrorMessage("Only host can update join requests.");
+      setToast({ message: "Only host can resend invites.", type: "error" });
       return;
     }
+    setInviteActionId(invite.id);
+    try {
+      await axios.post(
+        `${groupsApiBaseUrl}/${groupId}/invites`,
+        { email: invite.email },
+        { headers: authHeaders }
+      );
+      setToast({ message: `Invite resent to ${invite.email}.`, type: "success" });
+      await refreshDashboard();
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        setToast({ message: "Only host can resend invites.", type: "error" });
+      } else if (error?.response?.status === 404) {
+        setToast({ message: "Group not found.", type: "error" });
+      } else {
+        setToast({ message: "Could not resend invite.", type: "error" });
+      }
+    } finally {
+      setInviteActionId(null);
+    }
+  }
+
+  async function revokeInvite(invite) {
+    setToast({ message: "", type: "info" });
+    if (!isHost) {
+      setToast({ message: "Only host can cancel invites.", type: "error" });
+      return;
+    }
+    setInviteActionId(invite.id);
+    try {
+      await axios.patch(
+        `${groupsApiBaseUrl}/${groupId}/invites/${invite.id}`,
+        { status: "REVOKED" },
+        { headers: authHeaders }
+      );
+      setToast({ message: `Invite canceled for ${invite.email}.`, type: "success" });
+      await refreshDashboard();
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        setToast({ message: "Only host can cancel invites.", type: "error" });
+      } else if (error?.response?.status === 404) {
+        setToast({ message: "Invite not found.", type: "error" });
+      } else if (error?.response?.status === 409) {
+        setToast({ message: "Invite cannot be canceled in its current status.", type: "error" });
+      } else {
+        setToast({ message: "Could not cancel invite.", type: "error" });
+      }
+    } finally {
+      setInviteActionId(null);
+    }
+  }
+
+  async function updatePendingMembership(membershipId, nextStatus) {
+    setToast({ message: "", type: "info" });
+    if (!isHost) {
+      setToast({ message: "Only host can update join requests.", type: "error" });
+      return;
+    }
+    setMembershipActionId(membershipId);
     try {
       await axios.patch(
         `${groupsApiBaseUrl}/${groupId}/members/${membershipId}/status`,
         { status: nextStatus },
         { headers: authHeaders }
       );
-      setSuccessMessage(`Request ${nextStatus === "ACTIVE" ? "approved" : "rejected"}.`);
+      setToast({ message: `Request ${nextStatus === "ACTIVE" ? "approved" : "rejected"}.`, type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 403) {
-        setErrorMessage("Only host can update membership status.");
+        setToast({ message: "Only host can update membership status.", type: "error" });
       } else if (error?.response?.status === 404) {
-        setErrorMessage("Membership request not found.");
+        setToast({ message: "Membership request not found.", type: "error" });
       } else {
-        setErrorMessage("Could not update request.");
+        setToast({ message: "Could not update request.", type: "error" });
       }
+    } finally {
+      setMembershipActionId(null);
     }
   }
 
   async function submitPreferences(event) {
     event.preventDefault();
     setSaving(true);
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       await axios.put(
         `${groupsApiBaseUrl}/${groupId}/preferences`,
@@ -322,23 +394,49 @@ export default function GroupDashboard() {
         },
         { headers: authHeaders }
       );
-      setSuccessMessage("Preferences saved.");
+      setToast({ message: "Preferences saved.", type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 422) {
-        setErrorMessage("Invalid preferences. Check values and try again.");
+        setToast({ message: "Invalid preferences. Check values and try again.", type: "error" });
       } else if (error?.response?.status === 403) {
-        setErrorMessage("You are not an active member of this group.");
+        setToast({ message: "You are not an active member of this group.", type: "error" });
       } else {
-        setErrorMessage("Could not save preferences.");
+        setToast({ message: "Could not save preferences.", type: "error" });
       }
     } finally {
       setSaving(false);
     }
   }
 
+  async function markNotificationAsRead(notificationId) {
+    setToast({ message: "", type: "info" });
+    setReadingNotificationId(notificationId);
+    try {
+      await axios.patch(
+        `${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications/${notificationId}/read`,
+        {},
+        { headers: authHeaders }
+      );
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === notificationId ? { ...notification, is_read: true } : notification
+        )
+      );
+    } catch {
+      setToast({ message: "Could not mark notification as read.", type: "error" });
+    } finally {
+      setReadingNotificationId(null);
+    }
+  }
+
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
+      <AppToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "info" })}
+      />
       <div className="group-bg-gradient-create absolute inset-0" />
       <div className="scene-photo-wash-dashboard absolute inset-0 opacity-32" />
       <div className="group-cinematic-vignette absolute inset-0" />
@@ -391,24 +489,43 @@ export default function GroupDashboard() {
             <a href="#team-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Team</a>
             <a href="#updates-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Updates</a>
           </nav>
-          {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
-          {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {[
-            ["Group size", metrics?.groupSize],
-            ["Preferences completion", `${metrics?.preferenceCompletionPercent ?? 0}%`],
-            ["Conflict count", metrics?.conflictCount ?? 0],
-            ["Itinerary state", itinerary?.state || "NOT_CREATED"],
-            ["Itinerary confidence", `${metrics?.itineraryConfidenceScore ?? 0}%`],
-            ["Approval status", metrics?.approvalStatus || "NOT_STARTED"],
-          ].map(([label, value]) => (
-            <div key={label} className="metric-tile p-4 transition">
-              <p className="text-xs uppercase tracking-[0.16em] text-[#f1e7d7]/90">{label}</p>
-              <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
-            </div>
-          ))}
+          {loading && !metrics
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <div key={`metric-skeleton-${index}`} className="skeleton-card">
+                  <div className="skeleton-block h-4 w-2/3" />
+                  <div className="mt-3 skeleton-block h-8 w-1/2" />
+                </div>
+              ))
+            : [
+                ["Group size", metrics?.groupSize],
+                ["Preferences completion", `${metrics?.preferenceCompletionPercent ?? 0}%`],
+                ["Conflict count", metrics?.conflictCount ?? 0],
+                ["Itinerary state", itinerary?.state || "NOT_CREATED"],
+                ["Itinerary confidence", `${metrics?.itineraryConfidenceScore ?? 0}%`],
+                ["Approval status", metrics?.approvalStatus || "NOT_STARTED"],
+              ].map(([label, value]) => (
+                <div key={label} className="metric-tile p-4 transition">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#f1e7d7]/90">{label}</p>
+                  <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
+                </div>
+              ))}
+        </section>
+        <section className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-3">
+            <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Budget conflict</p>
+            <p className="mt-1 text-sm text-[#f1e7d7]">
+              {metrics?.budgetConflict ? "Detected: group budgets have no overlap." : "No conflict detected."}
+            </p>
+          </div>
+          <div className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-3">
+            <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Transport conflict</p>
+            <p className="mt-1 text-sm text-[#f1e7d7]">
+              {metrics?.transportConflict ? "Detected: members selected different transport modes." : "No conflict detected."}
+            </p>
+          </div>
         </section>
 
         <section className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
@@ -417,6 +534,12 @@ export default function GroupDashboard() {
             <p className="mt-2 text-sm text-[#f1e7d7]">
               State: <span className="text-[#fff7ea]">{itinerary?.state || "NOT_CREATED"}</span>
             </p>
+            {itinerary?.vote_summary ? (
+              <p className="mt-1 text-xs text-[#e8dbc7]/85">
+                Votes: {itinerary.vote_summary.approve ?? 0} approve / {itinerary.vote_summary.changes ?? 0} changes
+                {" "}({itinerary.vote_summary.total ?? 0} total)
+              </p>
+            ) : null}
             <div className="mt-4 space-y-3">
               <div className="rounded-xl border border-white/20 bg-white/5 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Planning actions</p>
@@ -586,9 +709,55 @@ export default function GroupDashboard() {
             <p className="mt-2 text-sm text-[#f1e7d7]">
               Completion: {status?.completion_percent ?? metrics?.preferenceCompletionPercent ?? 0}%
             </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs uppercase tracking-[0.14em] text-[#f1e7d7]/85">
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("ALL")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "ALL"
+                    ? "border-white/45 bg-white/18 text-[#fff7ea]"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                All ({members.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("ACTIVE")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "ACTIVE"
+                    ? "border-emerald-300/45 bg-emerald-500/20 text-emerald-100"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                Active ({activeMembers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("PENDING")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "PENDING"
+                    ? "border-amber-300/45 bg-amber-500/20 text-amber-100"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                Pending ({pendingMembers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("REJECTED")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "REJECTED"
+                    ? "border-rose-300/45 bg-rose-500/20 text-rose-100"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                Rejected ({rejectedMembers.length})
+              </button>
+            </div>
 
             <div className="mt-4 space-y-2">
-              {members.map((member) => {
+              {visibleMembers.map((member) => {
                 const hasPreferences = status?.members?.find((item) => item.user_id === member.id)?.has_preferences;
                 return (
                   <div
@@ -613,7 +782,9 @@ export default function GroupDashboard() {
                   </div>
                 );
               })}
-              {members.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No members found.</p> : null}
+              {visibleMembers.length === 0 ? (
+                <p className="text-sm text-[#e8dbc7]/80">No members for selected filter.</p>
+              ) : null}
             </div>
           </section>
           <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
@@ -632,19 +803,19 @@ export default function GroupDashboard() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        disabled={!isHost}
+                        disabled={!isHost || membershipActionId === member.membership_id}
                         onClick={() => updatePendingMembership(member.membership_id, "ACTIVE")}
-                        className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:opacity-50"
+                        className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Approve
+                        {membershipActionId === member.membership_id ? "Approving..." : "Approve"}
                       </button>
                       <button
                         type="button"
-                        disabled={!isHost}
+                        disabled={!isHost || membershipActionId === member.membership_id}
                         onClick={() => updatePendingMembership(member.membership_id, "REJECTED")}
-                        className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:opacity-50"
+                        className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Reject
+                        {membershipActionId === member.membership_id ? "Rejecting..." : "Reject"}
                       </button>
                     </div>
                   </div>
@@ -679,14 +850,65 @@ export default function GroupDashboard() {
             {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can send invites.</p> : null}
 
             <div className="mt-4 space-y-2">
-              <h3 className="text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Recent invites</h3>
-              {invites.slice(0, 4).map((invite) => (
-                <div key={invite.id} className="flex items-center justify-between rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2">
-                  <p className="truncate text-sm text-[#f7efdf]">{invite.email}</p>
-                  <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Recent invites</h3>
+                <div className="flex flex-wrap gap-1.5 text-[11px] uppercase tracking-[0.12em]">
+                  {["ALL", "SENT", "ACCEPTED", "REVOKED"].map((statusKey) => (
+                    <button
+                      key={statusKey}
+                      type="button"
+                      onClick={() => setInviteStatusFilter(statusKey)}
+                      className={`rounded-md border px-2 py-1 transition ${
+                        inviteStatusFilter === statusKey
+                          ? "border-white/45 bg-white/16 text-[#fff7ea]"
+                          : "border-white/20 bg-white/5 text-[#e8dbc7]/85 hover:bg-white/12"
+                      }`}
+                    >
+                      {statusKey}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {visibleInvites.slice(0, 6).map((invite) => (
+                <div
+                  key={invite.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-[#f7efdf]">{invite.email}</p>
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-[#e8dbc7]/70">
+                      {new Date(invite.created_at).toLocaleString()}
+                    </p>
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-[#d3c7b2]/70">
+                      Delivery: {invite.delivery_status || "PENDING"} | Attempts: {invite.delivery_attempts ?? 0}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>
+                    <button
+                      type="button"
+                      disabled={!isHost || inviteActionId === invite.id || invite.status !== "SENT"}
+                      onClick={() => resendInvite(invite)}
+                      className="rounded-md border border-[#f3e7d4]/25 bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {inviteActionId === invite.id ? "Resending..." : "Resend"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isHost || inviteActionId === invite.id || invite.status !== "SENT"}
+                      onClick={() => revokeInvite(invite)}
+                      className="rounded-md border border-rose-300/30 bg-rose-500/10 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {inviteActionId === invite.id ? "Canceling..." : "Cancel"}
+                    </button>
+                  </div>
                 </div>
               ))}
-              {invites.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No invites yet.</p> : null}
+              {visibleInvites.length === 0 ? (
+                <p className="text-sm text-[#e8dbc7]/80">
+                  {invites.length === 0 ? "No invites yet." : "No invites in selected status."}
+                </p>
+              ) : null}
             </div>
           </section>
         </section>
@@ -696,6 +918,9 @@ export default function GroupDashboard() {
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
               <h2 className="font-serif text-3xl">Notifications</h2>
+              <span className="rounded-full border border-white/25 bg-white/10 px-2 py-0.5 text-xs text-[#f1e7d7]">
+                {unreadNotifications} unread
+              </span>
             </div>
             <div className="mt-4 space-y-2">
               {filteredNotifications.map((notification) => (
@@ -703,8 +928,26 @@ export default function GroupDashboard() {
                     key={notification.id}
                     className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
                   >
-                    <p className="text-sm text-[#f7efdf]">{notification.message}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{notification.kind}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm text-[#f7efdf]">{notification.message}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{notification.kind}</p>
+                      </div>
+                      {notification.is_read ? (
+                        <span className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-[11px] text-[#d8ccb7]">
+                          Read
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={readingNotificationId === notification.id}
+                          onClick={() => markNotificationAsRead(notification.id)}
+                          className="rounded-md border border-[#f3e7d4]/25 bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {readingNotificationId === notification.id ? "Saving..." : "Mark read"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               {filteredNotifications.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No notifications.</p> : null}

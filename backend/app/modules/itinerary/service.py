@@ -54,6 +54,10 @@ def _serialize_itinerary(db: Session, itinerary: Itinerary):
                 ],
             }
         )
+    approve_count = db.query(Vote).filter(Vote.itinerary_id == itinerary.id, Vote.value == "APPROVE").count()
+    changes_count = db.query(Vote).filter(Vote.itinerary_id == itinerary.id, Vote.value == "CHANGES").count()
+    total_votes = approve_count + changes_count
+
     return {
         "id": itinerary.id,
         "group_id": itinerary.group_id,
@@ -61,6 +65,11 @@ def _serialize_itinerary(db: Session, itinerary: Itinerary):
         "confidence_score": itinerary.confidence_score,
         "created_by": itinerary.created_by,
         "created_at": itinerary.created_at,
+        "vote_summary": {
+            "approve": approve_count,
+            "changes": changes_count,
+            "total": total_votes,
+        },
         "days": day_rows,
     }
 
