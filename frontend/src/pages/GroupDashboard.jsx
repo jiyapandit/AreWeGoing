@@ -61,6 +61,11 @@ export default function GroupDashboard() {
     () => notifications.filter((n) => !groupId || String(n.group_id) === String(groupId)).slice(0, 4),
     [notifications, groupId]
   );
+  const itineraryState = itinerary?.state || "NOT_CREATED";
+  const canGenerateItinerary = itineraryState === "NOT_CREATED" || itineraryState === "DRAFT";
+  const canMoveToReview = itineraryState === "DRAFT";
+  const canVote = itineraryState === "REVIEW";
+  const canLock = isHost && itineraryState === "REVIEW";
 
   useEffect(() => {
     if (!authToken) {
@@ -391,21 +396,24 @@ export default function GroupDashboard() {
               <button
                 type="button"
                 onClick={generateItinerary}
-                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+                disabled={!canGenerateItinerary || loading}
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Generate
               </button>
               <button
                 type="button"
                 onClick={moveToReview}
-                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+                disabled={!canMoveToReview || loading}
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Move to Review
               </button>
               <select
                 value={voteValue}
                 onChange={(e) => setVoteValue(e.target.value)}
-                className="rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none"
+                disabled={!canVote || loading}
+                className="rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="APPROVE">Approve</option>
                 <option value="CHANGES">Request Changes</option>
@@ -413,7 +421,8 @@ export default function GroupDashboard() {
               <button
                 type="button"
                 onClick={voteItinerary}
-                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+                disabled={!canVote || loading}
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Vote
               </button>
@@ -421,7 +430,8 @@ export default function GroupDashboard() {
                 <button
                   type="button"
                   onClick={lockItineraryNow}
-                  className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
+                  disabled={!canLock || loading}
+                  className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Lock (Host)
                 </button>
@@ -431,6 +441,12 @@ export default function GroupDashboard() {
                 </span>
               )}
             </div>
+            <p className="mt-2 text-xs text-[#e8dbc7]/80">
+              {itineraryState === "NOT_CREATED" ? "Generate to start planning." : null}
+              {itineraryState === "DRAFT" ? "Draft ready. Move to review when the group is ready to vote." : null}
+              {itineraryState === "REVIEW" ? "Review open. Members can vote; host can lock after review." : null}
+              {itineraryState === "LOCKED" ? "Itinerary is locked. Generation and voting are disabled." : null}
+            </p>
 
             <div className="mt-4 space-y-3">
               {itinerary?.days?.slice(0, 2).map((day) => (

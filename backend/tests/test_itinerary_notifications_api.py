@@ -14,10 +14,10 @@ def assert_error_envelope(response, expected_status: int):
     assert isinstance(payload["message"], str)
 
 
-def create_group_and_join(client):
-    host_headers = register_and_login(client, "i_host@example.com")
-    member_headers = register_and_login(client, "i_member@example.com")
-    outsider_headers = register_and_login(client, "i_outsider@example.com")
+def create_group_and_join(client, prefix: str = "i"):
+    host_headers = register_and_login(client, f"{prefix}_host@example.com")
+    member_headers = register_and_login(client, f"{prefix}_member@example.com")
+    outsider_headers = register_and_login(client, f"{prefix}_outsider@example.com")
 
     created = client.post("/api/v1/groups", json={"name": "Itinerary Squad", "is_public": False}, headers=host_headers)
     assert created.status_code == 201
@@ -30,7 +30,7 @@ def create_group_and_join(client):
 
 
 def test_itinerary_vote_lock_and_notifications_statuses(client):
-    group_id, host_headers, member_headers, outsider_headers = create_group_and_join(client)
+    group_id, host_headers, member_headers, outsider_headers = create_group_and_join(client, prefix="i1")
 
     unauthorized = client.post(
         f"/api/v1/groups/{group_id}/itinerary/generate",
@@ -94,3 +94,40 @@ def test_itinerary_vote_lock_and_notifications_statuses(client):
 
     note_not_found = client.patch("/api/v1/notifications/999999/read", headers=member_headers)
     assert_error_envelope(note_not_found, 404)
+
+
+def test_itinerary_transition_matrix_enforced(client):
+    group_id, host_headers, member_headers, _ = create_group_and_join(client, prefix="i2")
+
+    generated = client.post(f"/api/v1/groups/{group_id}/itinerary/generate", headers=host_headers)
+    assert generated.status_code == 200
+
+    # Cannot regenerate once in REVIEW.
+    to_review = client.post(f"/api/v1/groups/{group_id}/itinerary/review", headers=host_headers)
+    assert to_review.status_code == 200
+
+    regen_in_review = client.post(f"/api/v1/groups/{group_id}/itinerary/generate", headers=host_headers)
+    assert_error_envelope(regen_in_review, 409)
+
+    # Valid review voting path.
+    vote_in_review = client.post(
+        f"/api/v1/groups/{group_id}/vote",
+        json={"value": "APPROVE"},
+        headers=member_headers,
+    )
+    assert vote_in_review.status_code == 200
+
+    # Lock moves REVIEW -> LOCKED.
+    lock_ok = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=host_headers)
+    assert lock_ok.status_code == 200
+
+    # Invalid transitions once locked.
+    review_when_locked = client.post(f"/api/v1/groups/{group_id}/itinerary/review", headers=host_headers)
+    assert_error_envelope(review_when_locked, 409)
+
+    vote_when_locked = client.post(
+        f"/api/v1/groups/{group_id}/vote",
+        json={"value": "CHANGES"},
+        headers=member_headers,
+    )
+    assert_error_envelope(vote_when_locked, 409)

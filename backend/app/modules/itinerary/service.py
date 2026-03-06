@@ -80,8 +80,8 @@ def generate_itinerary(db: Session, group_id: int, user_id: int):
         raise ValueError("GROUP_NOT_FOUND")
 
     current = _latest_itinerary(db, group_id)
-    if current and current.state == "LOCKED":
-        raise ValueError("LOCKED")
+    if current and current.state in {"REVIEW", "LOCKED"}:
+        raise ValueError("INVALID_STATE")
 
     prefs = db.query(Preference).filter(Preference.group_id == group_id).all()
     days = max(1, min(7, int(sum([p.days for p in prefs if p.days is not None]) / max(len([p for p in prefs if p.days is not None]), 1)) if any(p.days is not None for p in prefs) else 3))
