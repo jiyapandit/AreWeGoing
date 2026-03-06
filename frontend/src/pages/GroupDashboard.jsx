@@ -56,6 +56,11 @@ export default function GroupDashboard() {
     () => members.some((member) => member.id === currentUserId && member.role === "HOST" && member.status === "ACTIVE"),
     [members, currentUserId]
   );
+  const pendingMembers = useMemo(() => members.filter((member) => member.status === "PENDING"), [members]);
+  const filteredNotifications = useMemo(
+    () => notifications.filter((n) => !groupId || String(n.group_id) === String(groupId)).slice(0, 4),
+    [notifications, groupId]
+  );
 
   useEffect(() => {
     if (!authToken) {
@@ -322,18 +327,20 @@ export default function GroupDashboard() {
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
       <div className="group-bg-gradient-create absolute inset-0" />
+      <div className="scene-photo-wash-dashboard absolute inset-0 opacity-32" />
+      <div className="group-cinematic-vignette absolute inset-0" />
       <div className="group-orb-a absolute -left-24 top-8 h-[22rem] w-[22rem] rounded-full login-float-fast" />
       <div className="group-orb-b absolute -right-24 bottom-10 h-[25rem] w-[25rem] rounded-full login-float-slow" />
       <div className="absolute inset-0 grain" />
 
       <Navbar />
       <main className="relative z-10 mx-auto max-w-6xl space-y-6 px-6 pb-16 pt-6 md:pt-10">
-        <section className="dashboard-section group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+        <section className="dashboard-section group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-[#f0e4d0]/85">Group dashboard</p>
               <h1 className="mt-2 font-serif text-4xl leading-tight">{group?.name || `Group #${groupId}`}</h1>
-              <p className="mt-2 text-sm text-[#e8dcc8]/85">
+              <p className="mt-2 text-sm text-[#f1e7d7]">
                 Join code: <span className="tracking-[0.15em] text-[#fff7ea]">{group?.join_code || "-"}</span>
               </p>
             </div>
@@ -358,31 +365,103 @@ export default function GroupDashboard() {
           {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[
             ["Group size", metrics?.groupSize],
             ["Preferences completion", `${metrics?.preferenceCompletionPercent ?? 0}%`],
-            ["Budget alignment", `${metrics?.budgetAlignmentScore ?? 0}%`],
-            ["Activity match", `${metrics?.activityMatchScore ?? 0}%`],
             ["Conflict count", metrics?.conflictCount ?? 0],
+            ["Itinerary state", itinerary?.state || "NOT_CREATED"],
             ["Itinerary confidence", `${metrics?.itineraryConfidenceScore ?? 0}%`],
             ["Approval status", metrics?.approvalStatus || "NOT_STARTED"],
-            ["Members listed", members.length],
           ].map(([label, value]) => (
             <div key={label} className="metric-tile p-4 transition">
-              <p className="text-xs uppercase tracking-[0.16em] text-[#f0e4d0]/80">{label}</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-[#f1e7d7]/90">{label}</p>
               <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
             </div>
           ))}
         </section>
 
-        <section className="dashboard-section grid gap-6 lg:grid-cols-2">
+        <section className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
+            <h2 className="font-serif text-3xl">Itinerary</h2>
+            <p className="mt-2 text-sm text-[#f1e7d7]">
+              State: <span className="text-[#fff7ea]">{itinerary?.state || "NOT_CREATED"}</span>
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={generateItinerary}
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+              >
+                Generate
+              </button>
+              <button
+                type="button"
+                onClick={moveToReview}
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+              >
+                Move to Review
+              </button>
+              <select
+                value={voteValue}
+                onChange={(e) => setVoteValue(e.target.value)}
+                className="rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none"
+              >
+                <option value="APPROVE">Approve</option>
+                <option value="CHANGES">Request Changes</option>
+              </select>
+              <button
+                type="button"
+                onClick={voteItinerary}
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
+              >
+                Vote
+              </button>
+              {isHost ? (
+                <button
+                  type="button"
+                  onClick={lockItineraryNow}
+                  className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
+                >
+                  Lock (Host)
+                </button>
+              ) : (
+                <span className="rounded-xl border border-[#f3e7d4]/20 bg-[#11151c]/25 px-4 py-2 text-sm text-[#bfb39f]">
+                  Lock available to host only
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {itinerary?.days?.slice(0, 2).map((day) => (
+                <div key={day.day_number} className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-3">
+                  <p className="text-sm uppercase tracking-[0.16em] text-[#f1e7d7]/90">Day {day.day_number}</p>
+                  <div className="mt-2 space-y-2">
+                    {day.items.slice(0, 2).map((item) => (
+                      <div key={item.id} className="rounded-lg border border-[#f1e6d6]/20 bg-black/20 px-3 py-2">
+                        <p className="text-[#f7efdf]">{item.title}</p>
+                        <p className="text-xs text-[#f1e7d7]">{item.summary}</p>
+                        <p className="mt-1 text-xs text-[#d2c7b3]/80">
+                          ${item.estimated_cost} | {item.duration_hours}h
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {itinerary?.days?.length > 2 ? (
+                <p className="text-xs uppercase tracking-[0.12em] text-[#f1e7d7]/80">Open next days as itinerary evolves.</p>
+              ) : null}
+              {!itinerary ? <p className="text-sm text-[#f1e7d7]/90">No itinerary generated yet.</p> : null}
+            </div>
+          </section>
+
           <form
             onSubmit={submitPreferences}
-            className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6 space-y-4"
+            className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 space-y-4"
           >
             <h2 className="font-serif text-3xl">Preferences questionnaire</h2>
-            <p className="text-sm text-[#e8dcc8]/85">Update your constraints to improve group fit and metrics.</p>
+            <p className="text-sm text-[#f1e7d7]">Update your constraints to improve group fit and metrics.</p>
 
             <div className="grid gap-3 md:grid-cols-2">
               <input
@@ -446,13 +525,15 @@ export default function GroupDashboard() {
               {saving ? "Saving..." : "Save preferences"}
             </button>
           </form>
+        </section>
 
-          <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+        <section className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 xl:col-span-2">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               <h2 className="font-serif text-3xl">Group members</h2>
             </div>
-            <p className="mt-2 text-sm text-[#e8dcc8]/85">
+            <p className="mt-2 text-sm text-[#f1e7d7]">
               Completion: {status?.completion_percent ?? metrics?.preferenceCompletionPercent ?? 0}%
             </p>
 
@@ -485,87 +566,11 @@ export default function GroupDashboard() {
               {members.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No members found.</p> : null}
             </div>
           </section>
-        </section>
-
-        <section className="dashboard-section group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
-          <h2 className="font-serif text-3xl">Itinerary</h2>
-          <p className="mt-2 text-sm text-[#e8dcc8]/85">
-            State: <span className="text-[#fff7ea]">{itinerary?.state || "NOT_CREATED"}</span>
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={generateItinerary}
-              className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
-            >
-              Generate
-            </button>
-            <button
-              type="button"
-              onClick={moveToReview}
-              className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
-            >
-              Move to Review
-            </button>
-            <select
-              value={voteValue}
-              onChange={(e) => setVoteValue(e.target.value)}
-              className="rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none"
-            >
-              <option value="APPROVE">Approve</option>
-              <option value="CHANGES">Request Changes</option>
-            </select>
-            <button
-              type="button"
-              onClick={voteItinerary}
-              className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
-            >
-              Vote
-            </button>
-            {isHost ? (
-              <button
-                type="button"
-                onClick={lockItineraryNow}
-                className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
-              >
-                Lock (Host)
-              </button>
-            ) : (
-              <span className="rounded-xl border border-[#f3e7d4]/20 bg-[#11151c]/25 px-4 py-2 text-sm text-[#bfb39f]">
-                Lock available to host only
-              </span>
-            )}
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {itinerary?.days?.map((day) => (
-              <div key={day.day_number} className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-3">
-                <p className="text-sm uppercase tracking-[0.16em] text-[#e8dbc7]/75">Day {day.day_number}</p>
-                <div className="mt-2 space-y-2">
-                  {day.items.map((item) => (
-                    <div key={item.id} className="rounded-lg border border-[#f1e6d6]/20 bg-black/20 px-3 py-2">
-                      <p className="text-[#f7efdf]">{item.title}</p>
-                      <p className="text-xs text-[#e8dbc7]/85">{item.summary}</p>
-                      <p className="mt-1 text-xs text-[#d2c7b3]/80">
-                        ${item.estimated_cost} | {item.duration_hours}h | {item.rationale}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {!itinerary ? <p className="text-sm text-[#e8dbc7]/80">No itinerary generated yet.</p> : null}
-          </div>
-        </section>
-
-        <section className="dashboard-section grid gap-6 lg:grid-cols-2">
-          <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
             <h2 className="font-serif text-3xl">Pending join requests</h2>
             {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can manage requests.</p> : null}
             <div className="mt-4 space-y-2">
-              {members
-                .filter((member) => member.status === "PENDING")
-                .map((member) => (
+              {pendingMembers.map((member) => (
                   <div
                     key={member.membership_id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
@@ -579,7 +584,7 @@ export default function GroupDashboard() {
                         type="button"
                         disabled={!isHost}
                         onClick={() => updatePendingMembership(member.membership_id, "ACTIVE")}
-                        className="rounded-lg border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-100 disabled:opacity-50"
+                        className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:opacity-50"
                       >
                         Approve
                       </button>
@@ -587,21 +592,21 @@ export default function GroupDashboard() {
                         type="button"
                         disabled={!isHost}
                         onClick={() => updatePendingMembership(member.membership_id, "REJECTED")}
-                        className="rounded-lg border border-rose-300/30 bg-rose-500/15 px-3 py-1 text-xs text-rose-100 disabled:opacity-50"
+                        className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:opacity-50"
                       >
                         Reject
                       </button>
                     </div>
                   </div>
                 ))}
-              {members.filter((member) => member.status === "PENDING").length === 0 ? (
+              {pendingMembers.length === 0 ? (
                 <p className="text-sm text-[#e8dbc7]/80">No pending requests.</p>
               ) : null}
             </div>
           </section>
 
-          <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
-            <h2 className="font-serif text-3xl">Invite friends</h2>
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
+            <h2 className="font-serif text-3xl">Invites</h2>
             <form onSubmit={sendInvite} className="mt-4 flex flex-wrap gap-2">
               <input
                 type="email"
@@ -624,29 +629,26 @@ export default function GroupDashboard() {
             {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can send invites.</p> : null}
 
             <div className="mt-4 space-y-2">
-              {invites.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="flex items-center justify-between rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
-                >
-                  <p className="text-sm text-[#f7efdf]">{invite.email}</p>
+              <h3 className="text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Recent invites</h3>
+              {invites.slice(0, 4).map((invite) => (
+                <div key={invite.id} className="flex items-center justify-between rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2">
+                  <p className="truncate text-sm text-[#f7efdf]">{invite.email}</p>
                   <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>
                 </div>
               ))}
               {invites.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No invites yet.</p> : null}
             </div>
           </section>
+        </section>
 
-          <section className="group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6">
+        <section className="dashboard-section">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
               <h2 className="font-serif text-3xl">Notifications</h2>
             </div>
             <div className="mt-4 space-y-2">
-              {notifications
-                .filter((n) => !groupId || String(n.group_id) === String(groupId))
-                .slice(0, 8)
-                .map((notification) => (
+              {filteredNotifications.map((notification) => (
                   <div
                     key={notification.id}
                     className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
@@ -655,7 +657,7 @@ export default function GroupDashboard() {
                     <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{notification.kind}</p>
                   </div>
                 ))}
-              {notifications.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No notifications.</p> : null}
+              {filteredNotifications.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No notifications.</p> : null}
             </div>
           </section>
         </section>
