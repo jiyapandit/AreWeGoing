@@ -6,6 +6,13 @@ def register_and_login(client, email: str, password: str = "Password123"):
     token = login_res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
+def assert_error_envelope(response, expected_status: int):
+    assert response.status_code == expected_status
+    payload = response.json()
+    assert set(payload.keys()) == {"errorCode", "message", "details"}
+    assert isinstance(payload["errorCode"], str)
+    assert isinstance(payload["message"], str)
+
 
 def create_group_and_join(client):
     host_headers = register_and_login(client, "i_host@example.com")
@@ -29,20 +36,20 @@ def test_itinerary_vote_lock_and_notifications_statuses(client):
         f"/api/v1/groups/{group_id}/itinerary/generate",
         headers={"Authorization": "Bearer badtoken"},
     )
-    assert unauthorized.status_code == 401
+    assert_error_envelope(unauthorized, 401)
 
     forbidden = client.post(f"/api/v1/groups/{group_id}/itinerary/generate", headers=outsider_headers)
-    assert forbidden.status_code == 403
+    assert_error_envelope(forbidden, 403)
 
     not_found = client.get(f"/api/v1/groups/{group_id}/itinerary", headers=host_headers)
-    assert not_found.status_code == 404
+    assert_error_envelope(not_found, 404)
 
     vote_before_generate = client.post(
         f"/api/v1/groups/{group_id}/vote",
         json={"value": "APPROVE"},
         headers=host_headers,
     )
-    assert vote_before_generate.status_code == 404
+    assert_error_envelope(vote_before_generate, 404)
 
     generated = client.post(f"/api/v1/groups/{group_id}/itinerary/generate", headers=host_headers)
     assert generated.status_code == 200
@@ -52,7 +59,7 @@ def test_itinerary_vote_lock_and_notifications_statuses(client):
         json={"value": "APPROVE"},
         headers=member_headers,
     )
-    assert vote_invalid_state.status_code == 409
+    assert_error_envelope(vote_invalid_state, 409)
 
     to_review = client.post(f"/api/v1/groups/{group_id}/itinerary/review", headers=member_headers)
     assert to_review.status_code == 200
@@ -69,16 +76,16 @@ def test_itinerary_vote_lock_and_notifications_statuses(client):
         json={"value": "CHANGES"},
         headers=member_headers,
     )
-    assert vote_duplicate.status_code == 409
+    assert_error_envelope(vote_duplicate, 409)
 
     lock_forbidden = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=member_headers)
-    assert lock_forbidden.status_code == 403
+    assert_error_envelope(lock_forbidden, 403)
 
     lock_ok = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=host_headers)
     assert lock_ok.status_code == 200
 
     generate_after_lock = client.post(f"/api/v1/groups/{group_id}/itinerary/generate", headers=host_headers)
-    assert generate_after_lock.status_code == 409
+    assert_error_envelope(generate_after_lock, 409)
 
     notes = client.get("/api/v1/notifications", headers=member_headers)
     assert notes.status_code == 200
@@ -86,4 +93,4 @@ def test_itinerary_vote_lock_and_notifications_statuses(client):
     assert len(notes.json()) > 0
 
     note_not_found = client.patch("/api/v1/notifications/999999/read", headers=member_headers)
-    assert note_not_found.status_code == 404
+    assert_error_envelope(note_not_found, 404)

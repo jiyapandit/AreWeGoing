@@ -52,8 +52,18 @@ def startup():
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_, exc: HTTPException):
     code = f"HTTP_{exc.status_code}"
-    details = exc.detail if isinstance(exc.detail, (dict, list)) else None
-    message = exc.detail if isinstance(exc.detail, str) else "Request failed"
+    message = "Request failed"
+    details = None
+
+    if isinstance(exc.detail, str):
+        message = exc.detail
+    elif isinstance(exc.detail, list):
+        details = exc.detail
+    elif isinstance(exc.detail, dict):
+        code = str(exc.detail.get("errorCode") or code)
+        message = str(exc.detail.get("message") or message)
+        details = exc.detail.get("details")
+
     return JSONResponse(
         status_code=exc.status_code,
         content={"errorCode": code, "message": message, "details": details},
@@ -68,6 +78,18 @@ async def validation_exception_handler(_, exc: RequestValidationError):
             "errorCode": "VALIDATION_ERROR",
             "message": "Invalid request payload",
             "details": exc.errors(),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_, __):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "errorCode": "HTTP_500",
+            "message": "Internal server error",
+            "details": None,
         },
     )
 
