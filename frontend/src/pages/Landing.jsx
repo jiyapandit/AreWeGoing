@@ -8,7 +8,6 @@ import HowItWorks from "../components/HowItWorks";
 import SampleTrip from "../components/SampleTrip";
 import Footer from "../components/Footer";
 import ScrollExpansionHero from "../components/ui/scroll-expansion-hero";
-import HeroShaderDemo from "../components/ui/hero-section-with-smooth-bg-shader-demo";
 
 export default function Landing() {
   const [myGroups, setMyGroups] = useState([]);
@@ -61,33 +60,44 @@ export default function Landing() {
           <div className="mx-auto max-w-4xl">
             <div className="liquid-panel rounded-[2rem] border border-white/20 p-7 md:p-10">
               <h2 className="font-serif text-3xl text-[#fff7ea] md:text-5xl">Plan once. Travel together.</h2>
-              <p className="mt-4 max-w-2xl text-[#eadeca]/92">
+              <p className="mt-4 max-w-2xl text-[#f1e7d7]">
                 Build a trip that reflects everyone&apos;s preferences while preserving pace, budget, and mood.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/signup" className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]">
-                  Create account
-                </Link>
-                <Link to="/login" className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#efe3d1]">
-                  Sign in
-                </Link>
-                <Link
-                  to="/create-group"
-                  className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]"
-                >
-                  Create group
-                </Link>
-                <Link
-                  to="/join-group"
-                  className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#efe3d1]"
-                >
-                  Join group
-                </Link>
                 {token ? (
-                  <Link to="/dashboard" className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]">
-                    Open dashboard
-                  </Link>
-                ) : null}
+                  <>
+                    <Link
+                      to="/dashboard"
+                      className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]"
+                    >
+                      Open dashboard
+                    </Link>
+                    <Link
+                      to="/create-group"
+                      className="rounded-2xl border border-white/30 bg-white/10 px-5 py-3 text-[#f1e7d7] transition hover:bg-white/20"
+                    >
+                      Create group
+                    </Link>
+                    <Link
+                      to="/join-group"
+                      className="rounded-2xl border border-white/30 bg-white/10 px-5 py-3 text-[#f1e7d7] transition hover:bg-white/20"
+                    >
+                      Join group
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/signup" className="liquid-chip rounded-2xl border border-white/20 px-5 py-3 text-[#fff8eb]">
+                      Create account
+                    </Link>
+                    <Link
+                      to="/login"
+                      className="rounded-2xl border border-white/30 bg-white/10 px-5 py-3 text-[#f1e7d7] transition hover:bg-white/20"
+                    >
+                      Sign in
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -98,7 +108,7 @@ export default function Landing() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-serif text-3xl text-[#fff7ea] md:text-4xl">Dashboard & Planning Features</h3>
-                <p className="mt-2 text-sm text-[#eadeca]/90 md:text-base">
+                <p className="mt-2 text-sm text-[#f1e7d7] md:text-base">
                   Everything from preferences to locking the final itinerary now lives in one group dashboard.
                 </p>
               </div>
@@ -126,23 +136,15 @@ export default function Landing() {
                 ["Alignment Metrics", "See completion %, budget alignment, activity match, and conflicts."],
                 ["Itinerary Engine", "Generate day-by-day plan with rationale and confidence score."],
                 ["Voting & Review", "Move itinerary to review and collect member votes."],
-                ["Host Lock Controls", "Only host can lock final itinerary and stop further generation."],
-                ["Invites & Notifications", "Send invites, manage pending joins, and monitor updates."],
               ].map(([title, description]) => (
                 <div key={title} className="feature-grid-card">
                   <p className="text-lg text-[#fff7ea]">{title}</p>
-                  <p className="mt-1 text-sm text-[#e8ddcc]/90">{description}</p>
+                  <p className="mt-1 text-sm text-[#f1e7d7]">{description}</p>
                 </div>
               ))}
             </div>
 
             {myGroupsError ? <p className="mt-4 text-sm text-[#ffcfbf]">{myGroupsError}</p> : null}
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-6xl px-6 pb-12">
-          <div className="overflow-hidden rounded-[2rem] border border-white/15">
-            <HeroShaderDemo />
           </div>
         </section>
 
