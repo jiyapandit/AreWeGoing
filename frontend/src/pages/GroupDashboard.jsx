@@ -43,6 +43,7 @@ export default function GroupDashboard() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [memberStatusFilter, setMemberStatusFilter] = useState("ALL");
   const [membershipActionId, setMembershipActionId] = useState(null);
+  const [membershipBulkAction, setMembershipBulkAction] = useState("");
   const [inviteStatusFilter, setInviteStatusFilter] = useState("ALL");
   const [inviteActionId, setInviteActionId] = useState(null);
   const [readingNotificationId, setReadingNotificationId] = useState(null);
@@ -375,6 +376,44 @@ export default function GroupDashboard() {
       }
     } finally {
       setMembershipActionId(null);
+    }
+  }
+
+  async function updateAllPendingMemberships(nextStatus) {
+    setToast({ message: "", type: "info" });
+    if (!isHost) {
+      setToast({ message: "Only host can update join requests.", type: "error" });
+      return;
+    }
+    if (!sortedPendingMembers.length) {
+      setToast({ message: "No pending requests to update.", type: "info" });
+      return;
+    }
+
+    setMembershipBulkAction(nextStatus);
+    try {
+      let updatedCount = 0;
+      for (const member of sortedPendingMembers) {
+        try {
+          await axios.patch(
+            `${groupsApiBaseUrl}/${groupId}/members/${member.membership_id}/status`,
+            { status: nextStatus },
+            { headers: authHeaders }
+          );
+          updatedCount += 1;
+        } catch {
+          // Continue with the remaining requests and show summarized result.
+        }
+      }
+      await refreshDashboard();
+      if (updatedCount === 0) {
+        setToast({ message: "Could not update pending requests.", type: "error" });
+      } else {
+        const actionWord = nextStatus === "ACTIVE" ? "approved" : "rejected";
+        setToast({ message: `${updatedCount} pending request(s) ${actionWord}.`, type: "success" });
+      }
+    } finally {
+      setMembershipBulkAction("");
     }
   }
 
@@ -869,6 +908,26 @@ export default function GroupDashboard() {
                 {sortedPendingMembers.length > 0 ? `${sortedPendingMembers.length} request(s) awaiting review` : "No requests awaiting review"}
               </p>
             ) : null}
+            {isHost && sortedPendingMembers.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={Boolean(membershipActionId) || Boolean(membershipBulkAction)}
+                  onClick={() => updateAllPendingMemberships("ACTIVE")}
+                  className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs uppercase tracking-[0.12em] text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {membershipBulkAction === "ACTIVE" ? "Approving all..." : "Approve all"}
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(membershipActionId) || Boolean(membershipBulkAction)}
+                  onClick={() => updateAllPendingMemberships("REJECTED")}
+                  className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs uppercase tracking-[0.12em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {membershipBulkAction === "REJECTED" ? "Rejecting all..." : "Reject all"}
+                </button>
+              </div>
+            ) : null}
             <div className="mt-4 space-y-2">
               {sortedPendingMembers.map((member) => (
                   <div
@@ -883,7 +942,7 @@ export default function GroupDashboard() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        disabled={!isHost || membershipActionId === member.membership_id}
+                        disabled={!isHost || membershipActionId === member.membership_id || Boolean(membershipBulkAction)}
                         onClick={() => updatePendingMembership(member.membership_id, "ACTIVE")}
                         data-testid={`approve-request-${member.membership_id}`}
                         className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
@@ -892,7 +951,7 @@ export default function GroupDashboard() {
                       </button>
                       <button
                         type="button"
-                        disabled={!isHost || membershipActionId === member.membership_id}
+                        disabled={!isHost || membershipActionId === member.membership_id || Boolean(membershipBulkAction)}
                         onClick={() => updatePendingMembership(member.membership_id, "REJECTED")}
                         data-testid={`reject-request-${member.membership_id}`}
                         className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
