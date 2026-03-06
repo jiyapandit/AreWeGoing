@@ -71,6 +71,9 @@ def test_itinerary_vote_lock_and_notifications_statuses(client):
     )
     assert vote_ok.status_code == 200
 
+    lock_incomplete_votes = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=host_headers)
+    assert_error_envelope(lock_incomplete_votes, 409)
+
     vote_duplicate = client.post(
         f"/api/v1/groups/{group_id}/vote",
         json={"value": "CHANGES"},
@@ -80,6 +83,13 @@ def test_itinerary_vote_lock_and_notifications_statuses(client):
 
     lock_forbidden = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=member_headers)
     assert_error_envelope(lock_forbidden, 403)
+
+    host_vote = client.post(
+        f"/api/v1/groups/{group_id}/vote",
+        json={"value": "APPROVE"},
+        headers=host_headers,
+    )
+    assert host_vote.status_code == 200
 
     lock_ok = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=host_headers)
     assert lock_ok.status_code == 200
@@ -117,9 +127,40 @@ def test_itinerary_transition_matrix_enforced(client):
     )
     assert vote_in_review.status_code == 200
 
+    lock_incomplete_votes = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=host_headers)
+    assert_error_envelope(lock_incomplete_votes, 409)
+
+    host_vote = client.post(
+        f"/api/v1/groups/{group_id}/vote",
+        json={"value": "APPROVE"},
+        headers=host_headers,
+    )
+    assert host_vote.status_code == 200
+
     # Lock moves REVIEW -> LOCKED.
     lock_ok = client.post(f"/api/v1/groups/{group_id}/itinerary/lock", headers=host_headers)
     assert lock_ok.status_code == 200
+
+    # A group with change requests should not be lockable.
+    group_id_2, host_headers_2, member_headers_2, _ = create_group_and_join(client, prefix="i3")
+    generated_2 = client.post(f"/api/v1/groups/{group_id_2}/itinerary/generate", headers=host_headers_2)
+    assert generated_2.status_code == 200
+    to_review_2 = client.post(f"/api/v1/groups/{group_id_2}/itinerary/review", headers=host_headers_2)
+    assert to_review_2.status_code == 200
+    host_vote_2 = client.post(
+        f"/api/v1/groups/{group_id_2}/vote",
+        json={"value": "APPROVE"},
+        headers=host_headers_2,
+    )
+    assert host_vote_2.status_code == 200
+    member_change_vote = client.post(
+        f"/api/v1/groups/{group_id_2}/vote",
+        json={"value": "CHANGES"},
+        headers=member_headers_2,
+    )
+    assert member_change_vote.status_code == 200
+    lock_with_changes = client.post(f"/api/v1/groups/{group_id_2}/itinerary/lock", headers=host_headers_2)
+    assert_error_envelope(lock_with_changes, 409)
 
     # Invalid transitions once locked.
     review_when_locked = client.post(f"/api/v1/groups/{group_id}/itinerary/review", headers=host_headers)

@@ -90,4 +90,10 @@ def lock(group_id: int, db: Session = Depends(get_db), current_user: User = Depe
             raise HTTPException(status_code=404, detail="Itinerary not found")
         if code == "INVALID_STATE":
             raise HTTPException(status_code=409, detail="Itinerary must be in REVIEW state")
+        if code == "LOCK_VOTES_INCOMPLETE":
+            raise HTTPException(status_code=409, detail="All active members must vote before locking")
+        if code == "LOCK_HAS_CHANGE_REQUESTS":
+            raise HTTPException(status_code=409, detail="Cannot lock itinerary while change requests exist")
+        if code == "LOCK_APPROVAL_THRESHOLD":
+            raise HTTPException(status_code=409, detail="Approval threshold not met for lock")
         raise
