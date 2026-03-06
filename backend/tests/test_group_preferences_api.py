@@ -107,3 +107,42 @@ def test_public_join_request_host_approve_reject(client):
     assert members.status_code == 200
     pending = [m for m in members.json()["members"] if m["status"] == "PENDING"]
     assert len(pending) == 0
+
+
+def test_members_and_preferences_error_paths(client):
+    host_headers = register_and_login(client, "host3@example.com")
+    member_headers = register_and_login(client, "member3@example.com")
+    outsider_headers = register_and_login(client, "outsider3@example.com")
+
+    created = client.post("/api/v1/groups", json={"name": "Edge Trip", "is_public": True}, headers=host_headers)
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+    join_code = created.json()["join_code"]
+
+    join_ok = client.post("/api/v1/groups/join", json={"join_code": join_code}, headers=member_headers)
+    assert join_ok.status_code == 200
+
+    members_unauthorized = client.get(
+        f"/api/v1/groups/{group_id}/members",
+        headers={"Authorization": "Bearer badtoken"},
+    )
+    assert members_unauthorized.status_code == 401
+
+    members_forbidden = client.get(f"/api/v1/groups/{group_id}/members", headers=outsider_headers)
+    assert members_forbidden.status_code == 403
+
+    pref_me_not_found = client.get(f"/api/v1/groups/{group_id}/preferences/me", headers=host_headers)
+    assert pref_me_not_found.status_code == 404
+
+    pref_status_forbidden = client.get(f"/api/v1/groups/{group_id}/preferences/status", headers=outsider_headers)
+    assert pref_status_forbidden.status_code == 403
+
+    missing_membership_update = client.patch(
+        f"/api/v1/groups/{group_id}/members/999999/status",
+        json={"status": "ACTIVE"},
+        headers=host_headers,
+    )
+    assert missing_membership_update.status_code == 404
+
+    duplicate_join_request = client.post(f"/api/v1/groups/{group_id}/join-request", headers=member_headers)
+    assert duplicate_join_request.status_code == 409
