@@ -40,6 +40,8 @@ export default function GroupDashboard() {
   const [invites, setInvites] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [memberStatusFilter, setMemberStatusFilter] = useState("ALL");
+  const [membershipActionId, setMembershipActionId] = useState(null);
   const [toast, setToast] = useState({ message: "", type: "info" });
 
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -58,6 +60,12 @@ export default function GroupDashboard() {
     [members, currentUserId]
   );
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "PENDING"), [members]);
+  const activeMembers = useMemo(() => members.filter((member) => member.status === "ACTIVE"), [members]);
+  const rejectedMembers = useMemo(() => members.filter((member) => member.status === "REJECTED"), [members]);
+  const visibleMembers = useMemo(() => {
+    if (memberStatusFilter === "ALL") return members;
+    return members.filter((member) => member.status === memberStatusFilter);
+  }, [members, memberStatusFilter]);
   const filteredNotifications = useMemo(
     () => notifications.filter((n) => !groupId || String(n.group_id) === String(groupId)).slice(0, 4),
     [notifications, groupId]
@@ -270,6 +278,7 @@ export default function GroupDashboard() {
       setToast({ message: "Only host can update join requests.", type: "error" });
       return;
     }
+    setMembershipActionId(membershipId);
     try {
       await axios.patch(
         `${groupsApiBaseUrl}/${groupId}/members/${membershipId}/status`,
@@ -286,6 +295,8 @@ export default function GroupDashboard() {
       } else {
         setToast({ message: "Could not update request.", type: "error" });
       }
+    } finally {
+      setMembershipActionId(null);
     }
   }
 
@@ -588,9 +599,55 @@ export default function GroupDashboard() {
             <p className="mt-2 text-sm text-[#f1e7d7]">
               Completion: {status?.completion_percent ?? metrics?.preferenceCompletionPercent ?? 0}%
             </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs uppercase tracking-[0.14em] text-[#f1e7d7]/85">
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("ALL")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "ALL"
+                    ? "border-white/45 bg-white/18 text-[#fff7ea]"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                All ({members.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("ACTIVE")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "ACTIVE"
+                    ? "border-emerald-300/45 bg-emerald-500/20 text-emerald-100"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                Active ({activeMembers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("PENDING")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "PENDING"
+                    ? "border-amber-300/45 bg-amber-500/20 text-amber-100"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                Pending ({pendingMembers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberStatusFilter("REJECTED")}
+                className={`rounded-lg border px-2.5 py-1 transition ${
+                  memberStatusFilter === "REJECTED"
+                    ? "border-rose-300/45 bg-rose-500/20 text-rose-100"
+                    : "border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                Rejected ({rejectedMembers.length})
+              </button>
+            </div>
 
             <div className="mt-4 space-y-2">
-              {members.map((member) => {
+              {visibleMembers.map((member) => {
                 const hasPreferences = status?.members?.find((item) => item.user_id === member.id)?.has_preferences;
                 return (
                   <div
@@ -615,7 +672,9 @@ export default function GroupDashboard() {
                   </div>
                 );
               })}
-              {members.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No members found.</p> : null}
+              {visibleMembers.length === 0 ? (
+                <p className="text-sm text-[#e8dbc7]/80">No members for selected filter.</p>
+              ) : null}
             </div>
           </section>
           <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
@@ -634,19 +693,19 @@ export default function GroupDashboard() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        disabled={!isHost}
+                        disabled={!isHost || membershipActionId === member.membership_id}
                         onClick={() => updatePendingMembership(member.membership_id, "ACTIVE")}
-                        className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:opacity-50"
+                        className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Approve
+                        {membershipActionId === member.membership_id ? "Approving..." : "Approve"}
                       </button>
                       <button
                         type="button"
-                        disabled={!isHost}
+                        disabled={!isHost || membershipActionId === member.membership_id}
                         onClick={() => updatePendingMembership(member.membership_id, "REJECTED")}
-                        className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:opacity-50"
+                        className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Reject
+                        {membershipActionId === member.membership_id ? "Rejecting..." : "Reject"}
                       </button>
                     </div>
                   </div>
