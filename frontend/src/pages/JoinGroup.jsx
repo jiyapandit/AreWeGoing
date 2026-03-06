@@ -3,6 +3,7 @@ import { KeyRound, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import AppToast from "@/components/ui/app-toast";
 
 function getAccessToken() {
   return (
@@ -17,8 +18,8 @@ export default function JoinGroup() {
   const [publicGroups, setPublicGroups] = useState([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [requestingGroupId, setRequestingGroupId] = useState(null);
+  const [toast, setToast] = useState({ message: "", type: "info" });
 
   const authToken = getAccessToken();
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -48,11 +49,10 @@ export default function JoinGroup() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
 
     if (!authToken) {
-      setErrorMessage("Please sign in first to join a group.");
+      setToast({ message: "Please sign in first to join a group.", type: "error" });
       return;
     }
 
@@ -63,17 +63,19 @@ export default function JoinGroup() {
         { join_code: joinCode.trim() },
         { headers: { Authorization: `Bearer ${authToken}` }, timeout: 10000 }
       );
-      setSuccessMessage(`Joined "${data?.name || "group"}" successfully.`);
+      setToast({ message: `Joined "${data?.name || "group"}" successfully.`, type: "success" });
       navigate(`/groups/${data?.id}`);
     } catch (error) {
       if (error?.response?.status === 404) {
-        setErrorMessage("Group not found. Check your code.");
+        setToast({ message: "Group not found. Check your code.", type: "error" });
       } else if (error?.response?.status === 409) {
-        setErrorMessage("You are already a member of this group.");
+        setToast({ message: "You are already a member of this group.", type: "error" });
       } else if (error?.response?.status === 401) {
-        setErrorMessage("Session expired. Please sign in again.");
+        setToast({ message: "Session expired. Please sign in again.", type: "error" });
+      } else if (error?.response?.status === 403) {
+        setToast({ message: "You do not have permission to join this group.", type: "error" });
       } else {
-        setErrorMessage("Could not join group right now.");
+        setToast({ message: "Could not join group right now.", type: "error" });
       }
     } finally {
       setIsSubmitting(false);
@@ -81,30 +83,41 @@ export default function JoinGroup() {
   }
 
   async function requestToJoin(groupId, groupName) {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     if (!authToken) {
-      setErrorMessage("Please sign in first to send a join request.");
+      setToast({ message: "Please sign in first to send a join request.", type: "error" });
       return;
     }
+    setRequestingGroupId(groupId);
     try {
       await axios.post(`${groupsApiBaseUrl}/${groupId}/join-request`, {}, { headers: { Authorization: `Bearer ${authToken}` } });
-      setSuccessMessage(`Join request sent for "${groupName}". Waiting for host approval.`);
+      setToast({ message: `Join request sent for "${groupName}". Waiting for host approval.`, type: "success" });
     } catch (error) {
       if (error?.response?.status === 409) {
-        setErrorMessage("You have already requested or joined this group.");
+        setToast({ message: "You have already requested or joined this group.", type: "error" });
       } else if (error?.response?.status === 400) {
-        setErrorMessage("This group is not open for public requests.");
+        setToast({ message: "This group is not open for public requests.", type: "error" });
       } else if (error?.response?.status === 401) {
-        setErrorMessage("Session expired. Please sign in again.");
+        setToast({ message: "Session expired. Please sign in again.", type: "error" });
+      } else if (error?.response?.status === 403) {
+        setToast({ message: "You do not have permission to request this group.", type: "error" });
+      } else if (error?.response?.status === 404) {
+        setToast({ message: "Group not found.", type: "error" });
       } else {
-        setErrorMessage("Could not send join request.");
+        setToast({ message: "Could not send join request.", type: "error" });
       }
+    } finally {
+      setRequestingGroupId(null);
     }
   }
 
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
+      <AppToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "info" })}
+      />
       <div className="group-bg-gradient-join absolute inset-0" />
       <div className="scene-photo-wash-join absolute inset-0 opacity-43" />
       <div className="group-cinematic-vignette absolute inset-0" />
@@ -162,13 +175,18 @@ export default function JoinGroup() {
             </div>
           </form>
 
-          {errorMessage ? <p className="mt-5 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
-          {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}
-
           <div className="mt-8">
             <p className="text-xs uppercase tracking-[0.18em] text-[#f1e7d7]/90">Public groups</p>
             <div className="mt-3 space-y-2">
-              {loadingPublic ? <p className="text-sm text-[#f1e7d7]/90">Loading public groups...</p> : null}
+              {loadingPublic
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <div key={`public-group-skeleton-${index}`} className="skeleton-card">
+                      <div className="skeleton-block h-5 w-2/3" />
+                      <div className="mt-2 skeleton-block h-4 w-1/3" />
+                      <div className="mt-4 skeleton-block h-4 w-1/2" />
+                    </div>
+                  ))
+                : null}
               {!loadingPublic && publicGroups.length === 0 ? (
                 <p className="text-sm text-[#f1e7d7]/90">No public groups available right now.</p>
               ) : null}
@@ -190,10 +208,11 @@ export default function JoinGroup() {
                   </button>
                   <button
                     type="button"
+                    disabled={requestingGroupId === publicGroup.id}
                     onClick={() => requestToJoin(publicGroup.id, publicGroup.name)}
-                    className="rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs text-[#efe3d1] transition hover:bg-white/20"
+                    className="rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs text-[#efe3d1] transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-65"
                   >
-                    Request join
+                    {requestingGroupId === publicGroup.id ? "Requesting..." : "Request join"}
                   </button>
                 </div>
               ))}
