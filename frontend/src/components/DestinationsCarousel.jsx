@@ -1,4 +1,5 @@
 ﻿// src/components/DestinationsCarousel.jsx
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useRef } from "react";
 
 function Slide({ title, mood, image }) {
@@ -72,15 +73,17 @@ export default function DestinationsCarousel() {
             onClick={() => scrollBySlide(-1)}
             className="liquid-chip rounded-2xl border border-white/20 px-4 py-3 text-[#fff4e4]"
             type="button"
+            aria-label="Previous destinations"
           >
-            ?
+            <ChevronLeft className="h-5 w-5" />
           </button>
           <button
             onClick={() => scrollBySlide(1)}
             className="liquid-chip rounded-2xl border border-white/20 px-4 py-3 text-[#fff4e4]"
             type="button"
+            aria-label="Next destinations"
           >
-            ?
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       </div>
@@ -101,15 +104,17 @@ export default function DestinationsCarousel() {
           onClick={() => scrollBySlide(-1)}
           className="liquid-chip rounded-2xl border border-white/20 px-4 py-3 text-[#fff4e4]"
           type="button"
+          aria-label="Previous destinations"
         >
-          ?
+          <ChevronLeft className="h-5 w-5" />
         </button>
         <button
           onClick={() => scrollBySlide(1)}
           className="liquid-chip rounded-2xl border border-white/20 px-4 py-3 text-[#fff4e4]"
           type="button"
+          aria-label="Next destinations"
         >
-          ?
+          <ChevronRight className="h-5 w-5" />
         </button>
       </div>
     </section>
