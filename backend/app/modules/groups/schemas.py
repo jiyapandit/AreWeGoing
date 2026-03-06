@@ -66,3 +66,14 @@ class InviteResponse(BaseModel):
 
 class UpdateInviteStatusRequest(BaseModel):
     status: Literal["REVOKED"]
+
+
+class UserInviteResponse(BaseModel):
+    id: int
+    group_id: int
+    group_name: str
+    join_code: str
+    inviter_user_id: int
+    email: str
+    status: Literal["SENT", "ACCEPTED", "REVOKED"]
+    created_at: datetime

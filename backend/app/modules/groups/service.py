@@ -48,6 +48,27 @@ def join_group(db: Session, user_id: int, join_code: str) -> Group:
 
     membership = Membership(user_id=user_id, group_id=group.id, role="MEMBER", status="ACTIVE")
     db.add(membership)
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        sent_invites = db.query(Invite).filter(
+            Invite.group_id == group.id,
+            Invite.email == user.email.strip().lower(),
+            Invite.status == "SENT",
+        ).all()
+        notifier_ids = set()
+        for invite in sent_invites:
+            invite.status = "ACCEPTED"
+            db.add(invite)
+            notifier_ids.add(invite.inviter_user_id)
+        for inviter_id in notifier_ids:
+            db.add(
+                Notification(
+                    user_id=inviter_id,
+                    group_id=group.id,
+                    kind="INVITE_ACCEPTED",
+                    message=f'{user.email} accepted your invite to "{group.name}".',
+                )
+            )
     db.commit()
     return group
 
@@ -337,6 +358,34 @@ def list_group_invites(db: Session, group_id: int, user_id: int):
     return rows
 
 
+def list_user_invites(db: Session, user_id: int):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return []
+
+    rows = (
+        db.query(Invite, Group)
+        .join(Group, Group.id == Invite.group_id)
+        .filter(Invite.email == user.email.strip().lower(), Invite.status == "SENT")
+        .order_by(Invite.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": invite.id,
+            "group_id": invite.group_id,
+            "group_name": group.name,
+            "join_code": group.join_code,
+            "inviter_user_id": invite.inviter_user_id,
+            "email": invite.email,
+            "status": invite.status,
+            "created_at": invite.created_at,
+        }
+        for invite, group in rows
+    ]
+
+
 def update_group_invite_status(db: Session, group_id: int, invite_id: int, actor_id: int, new_status: str) -> Invite:
     host_membership = db.query(Membership).filter(
         Membership.group_id == group_id,
@@ -367,3 +416,51 @@ def update_group_invite_status(db: Session, group_id: int, invite_id: int, actor
         return invite
 
     raise ValueError("INVALID_STATUS")
+
+
+def accept_group_invite(db: Session, invite_id: int, user_id: int) -> Invite:
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("FORBIDDEN")
+
+    invite = db.query(Invite).filter(Invite.id == invite_id).first()
+    if not invite:
+        raise ValueError("INVITE_NOT_FOUND")
+
+    if invite.email.strip().lower() != user.email.strip().lower():
+        raise ValueError("FORBIDDEN")
+
+    group = db.query(Group).filter(Group.id == invite.group_id).first()
+    if not group:
+        raise ValueError("GROUP_NOT_FOUND")
+
+    if invite.status == "REVOKED":
+        raise ValueError("INVITE_NOT_ACTIVE")
+
+    membership = db.query(Membership).filter(
+        Membership.group_id == invite.group_id,
+        Membership.user_id == user_id,
+    ).first()
+    if membership:
+        if membership.status != "ACTIVE":
+            membership.status = "ACTIVE"
+            membership.role = "MEMBER"
+            db.add(membership)
+    else:
+        db.add(Membership(user_id=user_id, group_id=invite.group_id, role="MEMBER", status="ACTIVE"))
+
+    if invite.status != "ACCEPTED":
+        invite.status = "ACCEPTED"
+        db.add(invite)
+        db.add(
+            Notification(
+                user_id=invite.inviter_user_id,
+                group_id=invite.group_id,
+                kind="INVITE_ACCEPTED",
+                message=f'{user.email} accepted your invite to "{group.name}".',
+            )
+        )
+
+    db.commit()
+    db.refresh(invite)
+    return invite

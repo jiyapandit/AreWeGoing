@@ -15,9 +15,11 @@ from app.modules.groups.schemas import (
     JoinGroupRequest,
     JoinRequestResponse,
     UpdateInviteStatusRequest,
+    UserInviteResponse,
     UpdateMembershipStatusRequest,
 )
 from app.modules.groups.service import (
+    accept_group_invite,
     create_group,
     get_group_details,
     get_group_members,
@@ -25,6 +27,7 @@ from app.modules.groups.service import (
     get_user_groups,
     join_group,
     list_group_invites,
+    list_user_invites,
     list_public_groups,
     request_join_public_group,
     send_group_invite,
@@ -168,6 +171,35 @@ def get_invites(group_id: int, db: Session = Depends(get_db), current_user: User
     except ValueError as e:
         if str(e) == "FORBIDDEN":
             raise HTTPException(status_code=403, detail="Not a member of this group")
+        raise
+
+
+@router.get("/invites/me", response_model=list[UserInviteResponse])
+def get_my_invites(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rows = list_user_invites(db, current_user.id)
+    return [UserInviteResponse(**row) for row in rows]
+
+
+@router.post("/invites/{invite_id}/accept", response_model=InviteResponse)
+def accept_invite(invite_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        invite = accept_group_invite(db, invite_id, current_user.id)
+        return InviteResponse(
+            id=invite.id,
+            group_id=invite.group_id,
+            email=invite.email,
+            status=invite.status,
+            created_at=invite.created_at,
+        )
+    except ValueError as e:
+        if str(e) == "FORBIDDEN":
+            raise HTTPException(status_code=403, detail="Invite does not belong to current user")
+        if str(e) == "INVITE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Invite not found")
+        if str(e) == "GROUP_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Group not found")
+        if str(e) == "INVITE_NOT_ACTIVE":
+            raise HTTPException(status_code=409, detail="Invite is no longer active")
         raise
 
 

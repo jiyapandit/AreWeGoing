@@ -212,27 +212,18 @@ def test_invite_revoke_paths(client):
 
     not_revocable_invite = client.post(
         f"/api/v1/groups/{group_id}/invites",
-        json={"email": "member-invite@example.com"},
+        json={"email": "outsider-invite@example.com"},
         headers=host_headers,
     )
     assert not_revocable_invite.status_code == 201
     not_revocable_id = not_revocable_invite.json()["id"]
 
-    accept_by_join = client.post("/api/v1/groups/join", json={"join_code": join_code}, headers=outsider_headers)
-    assert accept_by_join.status_code == 200
-
-    # mark invite as accepted to emulate accepted flow before revocation attempt
-    # (existing API currently does not auto-update invite status on join)
-    from db.session import SessionLocal
-    from db.models.invite import Invite
-    db = SessionLocal()
-    try:
-        invite = db.query(Invite).filter(Invite.id == not_revocable_id).first()
-        invite.status = "ACCEPTED"
-        db.add(invite)
-        db.commit()
-    finally:
-        db.close()
+    accept_invite = client.post(
+        f"/api/v1/groups/invites/{not_revocable_id}/accept",
+        headers=outsider_headers,
+    )
+    assert accept_invite.status_code == 200
+    assert accept_invite.json()["status"] == "ACCEPTED"
 
     revoke_accepted = client.patch(
         f"/api/v1/groups/{group_id}/invites/{not_revocable_id}",
@@ -240,3 +231,43 @@ def test_invite_revoke_paths(client):
         headers=host_headers,
     )
     assert_error_envelope(revoke_accepted, 409)
+
+
+def test_invite_accept_flow_and_notifications(client):
+    host_headers = register_and_login(client, "host-accept@example.com")
+    invited_headers = register_and_login(client, "invited-accept@example.com")
+    other_headers = register_and_login(client, "other-accept@example.com")
+
+    created = client.post("/api/v1/groups", json={"name": "Accept Trip", "is_public": False}, headers=host_headers)
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+
+    invite_res = client.post(
+        f"/api/v1/groups/{group_id}/invites",
+        json={"email": "invited-accept@example.com"},
+        headers=host_headers,
+    )
+    assert invite_res.status_code == 201
+    invite_id = invite_res.json()["id"]
+
+    my_invites = client.get("/api/v1/groups/invites/me", headers=invited_headers)
+    assert my_invites.status_code == 200
+    invite_ids = [row["id"] for row in my_invites.json()]
+    assert invite_id in invite_ids
+
+    forbidden_accept = client.post(f"/api/v1/groups/invites/{invite_id}/accept", headers=other_headers)
+    assert_error_envelope(forbidden_accept, 403)
+
+    accepted = client.post(f"/api/v1/groups/invites/{invite_id}/accept", headers=invited_headers)
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "ACCEPTED"
+
+    my_invites_after = client.get("/api/v1/groups/invites/me", headers=invited_headers)
+    assert my_invites_after.status_code == 200
+    invite_ids_after = [row["id"] for row in my_invites_after.json()]
+    assert invite_id not in invite_ids_after
+
+    host_notifications = client.get("/api/v1/notifications", headers=host_headers)
+    assert host_notifications.status_code == 200
+    kinds = [n["kind"] for n in host_notifications.json()]
+    assert "INVITE_ACCEPTED" in kinds
