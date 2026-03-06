@@ -19,6 +19,7 @@ export default function JoinGroup() {
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestingGroupId, setRequestingGroupId] = useState(null);
+  const [requestedGroupIds, setRequestedGroupIds] = useState(() => new Set());
   const [toast, setToast] = useState({ message: "", type: "info" });
 
   const authToken = getAccessToken();
@@ -91,9 +92,11 @@ export default function JoinGroup() {
     setRequestingGroupId(groupId);
     try {
       await axios.post(`${groupsApiBaseUrl}/${groupId}/join-request`, {}, { headers: { Authorization: `Bearer ${authToken}` } });
+      setRequestedGroupIds((prev) => new Set(prev).add(groupId));
       setToast({ message: `Join request sent for "${groupName}". Waiting for host approval.`, type: "success" });
     } catch (error) {
       if (error?.response?.status === 409) {
+        setRequestedGroupIds((prev) => new Set(prev).add(groupId));
         setToast({ message: "You have already requested or joined this group.", type: "error" });
       } else if (error?.response?.status === 400) {
         setToast({ message: "This group is not open for public requests.", type: "error" });
@@ -193,6 +196,7 @@ export default function JoinGroup() {
               {publicGroups.map((publicGroup) => (
                 <div
                   key={publicGroup.id}
+                  data-testid="public-group-card"
                   className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/25 bg-white/8 px-3 py-2 backdrop-blur-xl"
                 >
                   <div>
@@ -210,9 +214,14 @@ export default function JoinGroup() {
                     type="button"
                     disabled={requestingGroupId === publicGroup.id}
                     onClick={() => requestToJoin(publicGroup.id, publicGroup.name)}
+                    data-testid={`request-join-${publicGroup.id}`}
                     className="rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs text-[#efe3d1] transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-65"
                   >
-                    {requestingGroupId === publicGroup.id ? "Requesting..." : "Request join"}
+                    {requestingGroupId === publicGroup.id
+                      ? "Requesting..."
+                      : requestedGroupIds.has(publicGroup.id)
+                        ? "Requested"
+                        : "Request join"}
                   </button>
                 </div>
               ))}

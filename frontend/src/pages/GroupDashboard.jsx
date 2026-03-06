@@ -64,6 +64,10 @@ export default function GroupDashboard() {
     [members, currentUserId]
   );
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "PENDING"), [members]);
+  const sortedPendingMembers = useMemo(
+    () => [...pendingMembers].sort((a, b) => String(a.email || "").localeCompare(String(b.email || ""))),
+    [pendingMembers]
+  );
   const activeMembers = useMemo(() => members.filter((member) => member.status === "ACTIVE"), [members]);
   const rejectedMembers = useMemo(() => members.filter((member) => member.status === "REJECTED"), [members]);
   const visibleMembers = useMemo(() => {
@@ -770,7 +774,7 @@ export default function GroupDashboard() {
         </section>
 
         <section id="team-section" className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
-          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 xl:col-span-2">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 xl:col-span-2" data-testid="group-members-panel">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               <h2 className="font-serif text-3xl">Group members</h2>
@@ -831,6 +835,7 @@ export default function GroupDashboard() {
                 return (
                   <div
                     key={member.id}
+                    data-testid={`group-member-${member.id}`}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
                   >
                     <div>
@@ -856,13 +861,19 @@ export default function GroupDashboard() {
               ) : null}
             </div>
           </section>
-          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6" data-testid="pending-requests-panel">
             <h2 className="font-serif text-3xl">Pending join requests</h2>
             {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can manage requests.</p> : null}
+            {isHost ? (
+              <p className="mt-2 text-xs uppercase tracking-[0.15em] text-[#d8ccb7]/80">
+                {sortedPendingMembers.length > 0 ? `${sortedPendingMembers.length} request(s) awaiting review` : "No requests awaiting review"}
+              </p>
+            ) : null}
             <div className="mt-4 space-y-2">
-              {pendingMembers.map((member) => (
+              {sortedPendingMembers.map((member) => (
                   <div
                     key={member.membership_id}
+                    data-testid={`pending-request-${member.membership_id}`}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
                   >
                     <div>
@@ -874,6 +885,7 @@ export default function GroupDashboard() {
                         type="button"
                         disabled={!isHost || membershipActionId === member.membership_id}
                         onClick={() => updatePendingMembership(member.membership_id, "ACTIVE")}
+                        data-testid={`approve-request-${member.membership_id}`}
                         className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {membershipActionId === member.membership_id ? "Approving..." : "Approve"}
@@ -882,6 +894,7 @@ export default function GroupDashboard() {
                         type="button"
                         disabled={!isHost || membershipActionId === member.membership_id}
                         onClick={() => updatePendingMembership(member.membership_id, "REJECTED")}
+                        data-testid={`reject-request-${member.membership_id}`}
                         className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {membershipActionId === member.membership_id ? "Rejecting..." : "Reject"}
@@ -889,8 +902,8 @@ export default function GroupDashboard() {
                     </div>
                   </div>
                 ))}
-              {pendingMembers.length === 0 ? (
-                <p className="text-sm text-[#e8dbc7]/80">No pending requests.</p>
+              {sortedPendingMembers.length === 0 ? (
+                <p className="text-sm text-[#e8dbc7]/80">{isHost ? "No pending requests." : "Pending requests are visible to host only."}</p>
               ) : null}
             </div>
           </section>
