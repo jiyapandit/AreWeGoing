@@ -335,3 +335,35 @@ def list_group_invites(db: Session, group_id: int, user_id: int):
 
     rows = db.query(Invite).filter(Invite.group_id == group_id).order_by(Invite.created_at.desc()).all()
     return rows
+
+
+def update_group_invite_status(db: Session, group_id: int, invite_id: int, actor_id: int, new_status: str) -> Invite:
+    host_membership = db.query(Membership).filter(
+        Membership.group_id == group_id,
+        Membership.user_id == actor_id,
+        Membership.status == "ACTIVE",
+        Membership.role == "HOST",
+    ).first()
+    if not host_membership:
+        raise ValueError("FORBIDDEN")
+
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise ValueError("GROUP_NOT_FOUND")
+
+    invite = db.query(Invite).filter(Invite.id == invite_id, Invite.group_id == group_id).first()
+    if not invite:
+        raise ValueError("INVITE_NOT_FOUND")
+
+    if new_status == "REVOKED":
+        if invite.status == "REVOKED":
+            return invite
+        if invite.status != "SENT":
+            raise ValueError("INVITE_NOT_REVOCABLE")
+        invite.status = "REVOKED"
+        db.add(invite)
+        db.commit()
+        db.refresh(invite)
+        return invite
+
+    raise ValueError("INVALID_STATUS")

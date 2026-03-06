@@ -62,3 +62,7 @@ class InviteResponse(BaseModel):
     email: str
     status: Literal["SENT", "ACCEPTED", "REVOKED"]
     created_at: datetime
+
+
+class UpdateInviteStatusRequest(BaseModel):
+    status: Literal["REVOKED"]

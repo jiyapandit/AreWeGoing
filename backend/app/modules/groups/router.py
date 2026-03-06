@@ -14,6 +14,7 @@ from app.modules.groups.schemas import (
     InviteResponse,
     JoinGroupRequest,
     JoinRequestResponse,
+    UpdateInviteStatusRequest,
     UpdateMembershipStatusRequest,
 )
 from app.modules.groups.service import (
@@ -27,6 +28,7 @@ from app.modules.groups.service import (
     list_public_groups,
     request_join_public_group,
     send_group_invite,
+    update_group_invite_status,
     update_membership_status,
 )
 
@@ -166,6 +168,35 @@ def get_invites(group_id: int, db: Session = Depends(get_db), current_user: User
     except ValueError as e:
         if str(e) == "FORBIDDEN":
             raise HTTPException(status_code=403, detail="Not a member of this group")
+        raise
+
+
+@router.patch("/{group_id}/invites/{invite_id}", response_model=InviteResponse)
+def set_invite_status(
+    group_id: int,
+    invite_id: int,
+    payload: UpdateInviteStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        invite = update_group_invite_status(db, group_id, invite_id, current_user.id, payload.status)
+        return InviteResponse(
+            id=invite.id,
+            group_id=invite.group_id,
+            email=invite.email,
+            status=invite.status,
+            created_at=invite.created_at,
+        )
+    except ValueError as e:
+        if str(e) == "FORBIDDEN":
+            raise HTTPException(status_code=403, detail="Only host can update invite status")
+        if str(e) == "GROUP_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Group not found")
+        if str(e) == "INVITE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Invite not found")
+        if str(e) == "INVITE_NOT_REVOCABLE":
+            raise HTTPException(status_code=409, detail="Invite cannot be revoked in its current state")
         raise
 
 @router.get("/{group_id}")

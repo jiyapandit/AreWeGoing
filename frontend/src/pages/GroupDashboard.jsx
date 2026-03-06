@@ -306,6 +306,36 @@ export default function GroupDashboard() {
     }
   }
 
+  async function revokeInvite(invite) {
+    setToast({ message: "", type: "info" });
+    if (!isHost) {
+      setToast({ message: "Only host can cancel invites.", type: "error" });
+      return;
+    }
+    setInviteActionId(invite.id);
+    try {
+      await axios.patch(
+        `${groupsApiBaseUrl}/${groupId}/invites/${invite.id}`,
+        { status: "REVOKED" },
+        { headers: authHeaders }
+      );
+      setToast({ message: `Invite canceled for ${invite.email}.`, type: "success" });
+      await refreshDashboard();
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        setToast({ message: "Only host can cancel invites.", type: "error" });
+      } else if (error?.response?.status === 404) {
+        setToast({ message: "Invite not found.", type: "error" });
+      } else if (error?.response?.status === 409) {
+        setToast({ message: "Invite cannot be canceled in its current status.", type: "error" });
+      } else {
+        setToast({ message: "Could not cancel invite.", type: "error" });
+      }
+    } finally {
+      setInviteActionId(null);
+    }
+  }
+
   async function updatePendingMembership(membershipId, nextStatus) {
     setToast({ message: "", type: "info" });
     if (!isHost) {
@@ -808,11 +838,19 @@ export default function GroupDashboard() {
                     <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>
                     <button
                       type="button"
-                      disabled={!isHost || inviteActionId === invite.id}
+                      disabled={!isHost || inviteActionId === invite.id || invite.status !== "SENT"}
                       onClick={() => resendInvite(invite)}
                       className="rounded-md border border-[#f3e7d4]/25 bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {inviteActionId === invite.id ? "Resending..." : "Resend"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isHost || inviteActionId === invite.id || invite.status !== "SENT"}
+                      onClick={() => revokeInvite(invite)}
+                      className="rounded-md border border-rose-300/30 bg-rose-500/10 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {inviteActionId === invite.id ? "Canceling..." : "Cancel"}
                     </button>
                   </div>
                 </div>
@@ -822,9 +860,6 @@ export default function GroupDashboard() {
                   {invites.length === 0 ? "No invites yet." : "No invites in selected status."}
                 </p>
               ) : null}
-              <p className="text-[11px] text-[#c9bea9]/75">
-                Cancel/revoke invite action will be enabled after backend revoke endpoint is added.
-              </p>
             </div>
           </section>
         </section>
