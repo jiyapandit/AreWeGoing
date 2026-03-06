@@ -45,6 +45,7 @@ export default function GroupDashboard() {
   const [membershipActionId, setMembershipActionId] = useState(null);
   const [membershipBulkAction, setMembershipBulkAction] = useState("");
   const [inviteStatusFilter, setInviteStatusFilter] = useState("ALL");
+  const [inviteDeliveryFilter, setInviteDeliveryFilter] = useState("ALL");
   const [inviteActionId, setInviteActionId] = useState(null);
   const [readingNotificationId, setReadingNotificationId] = useState(null);
   const [toast, setToast] = useState({ message: "", type: "info" });
@@ -84,9 +85,12 @@ export default function GroupDashboard() {
     [filteredNotifications]
   );
   const visibleInvites = useMemo(() => {
-    if (inviteStatusFilter === "ALL") return invites;
-    return invites.filter((invite) => invite.status === inviteStatusFilter);
-  }, [invites, inviteStatusFilter]);
+    return invites.filter((invite) => {
+      const statusMatch = inviteStatusFilter === "ALL" || invite.status === inviteStatusFilter;
+      const deliveryMatch = inviteDeliveryFilter === "ALL" || (invite.delivery_status || "PENDING") === inviteDeliveryFilter;
+      return statusMatch && deliveryMatch;
+    });
+  }, [invites, inviteDeliveryFilter, inviteStatusFilter]);
   const itineraryState = itinerary?.state || "NOT_CREATED";
   const canGenerateItinerary = itineraryState === "NOT_CREATED" || itineraryState === "DRAFT";
   const canMoveToReview = itineraryState === "DRAFT";
@@ -1009,6 +1013,22 @@ export default function GroupDashboard() {
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 text-[11px] uppercase tracking-[0.12em]">
+                {["ALL", "PENDING", "DELIVERED", "FAILED", "BOUNCED"].map((deliveryKey) => (
+                  <button
+                    key={deliveryKey}
+                    type="button"
+                    onClick={() => setInviteDeliveryFilter(deliveryKey)}
+                    className={`rounded-md border px-2 py-1 transition ${
+                      inviteDeliveryFilter === deliveryKey
+                        ? "border-sky-300/55 bg-sky-500/18 text-sky-100"
+                        : "border-white/20 bg-white/5 text-[#d8ccb7]/85 hover:bg-white/12"
+                    }`}
+                  >
+                    {deliveryKey}
+                  </button>
+                ))}
               </div>
               {visibleInvites.slice(0, 6).map((invite) => (
                 <div

@@ -248,8 +248,31 @@ def update_membership_status(db: Session, group_id: int, actor_id: int, membersh
     if not membership:
         raise ValueError("MEMBERSHIP_NOT_FOUND")
 
+    if membership.status == new_status:
+        return membership
+
+    group = db.query(Group).filter(Group.id == group_id).first()
     membership.status = new_status
     db.add(membership)
+    if membership.role == "MEMBER":
+        if new_status == "ACTIVE":
+            db.add(
+                Notification(
+                    user_id=membership.user_id,
+                    group_id=group_id,
+                    kind="JOIN_REQUEST_APPROVED",
+                    message=f'Your request to join "{group.name if group else f"Group #{group_id}"}" was approved.',
+                )
+            )
+        elif new_status == "REJECTED":
+            db.add(
+                Notification(
+                    user_id=membership.user_id,
+                    group_id=group_id,
+                    kind="JOIN_REQUEST_REJECTED",
+                    message=f'Your request to join "{group.name if group else f"Group #{group_id}"}" was rejected.',
+                )
+            )
     db.commit()
     db.refresh(membership)
     return membership

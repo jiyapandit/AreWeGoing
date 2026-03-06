@@ -188,23 +188,46 @@ export default function DashboardHome() {
                   </div>
                 ))
               : null}
-            {myGroups.map((group) => (
-              <Link
-                key={group.id}
-                to={`/groups/${group.id}`}
-                className="trip-card block"
-              >
-                <p className="text-xl text-[#fff7ea]">{group.name}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">
-                  {group.role} / {group.status}
-                </p>
-                <p className="mt-2 text-sm text-[#e8dcc8]/85">Join code: {group.join_code}</p>
-                <div className="mt-4 flex items-center gap-2 text-xs text-[#daccb6]/90">
-                  <Users className="h-3.5 w-3.5" />
-                  Open trip dashboard
-                </div>
-              </Link>
-            ))}
+            {myGroups.map((group) => {
+              const isActiveMembership = group.status === "ACTIVE";
+              const cardContent = (
+                <>
+                  <p className="text-xl text-[#fff7ea]">{group.name}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">
+                    {group.role} / {group.status}
+                  </p>
+                  <p className="mt-2 text-sm text-[#e8dcc8]/85">Join code: {group.join_code}</p>
+                  {group.status === "PENDING" ? (
+                    <p className="mt-3 text-xs uppercase tracking-[0.12em] text-amber-200/90">Awaiting host approval</p>
+                  ) : null}
+                  {group.status === "REJECTED" ? (
+                    <p className="mt-3 text-xs uppercase tracking-[0.12em] text-rose-200/90">Request declined by host</p>
+                  ) : null}
+                  <div className="mt-4 flex items-center gap-2 text-xs text-[#daccb6]/90">
+                    <Users className="h-3.5 w-3.5" />
+                    {isActiveMembership ? "Open trip dashboard" : "View unavailable until active"}
+                  </div>
+                </>
+              );
+
+              if (!isActiveMembership) {
+                return (
+                  <div key={group.id} className="trip-card block opacity-85" aria-disabled="true">
+                    {cardContent}
+                  </div>
+                );
+              }
+
+              return (
+                <Link
+                  key={group.id}
+                  to={`/groups/${group.id}`}
+                  className="trip-card block"
+                >
+                  {cardContent}
+                </Link>
+              );
+            })}
 
             {!loading && myGroups.length === 0 ? (
               <div className="trip-card p-5">
