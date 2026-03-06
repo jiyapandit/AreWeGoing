@@ -54,6 +54,19 @@ class GroupMetricsResponse(BaseModel):
     approvalStatus: str
 
 
+class GroupMetricSnapshotResponse(BaseModel):
+    id: int
+    group_id: int
+    groupSize: int
+    preferenceCompletionPercent: int
+    budgetAlignmentScore: int
+    activityMatchScore: int
+    conflictCount: int
+    itineraryConfidenceScore: int
+    approvalStatus: str
+    created_at: datetime
+
+
 class InviteRequest(BaseModel):
     email: str = Field(min_length=5, max_length=320)
 

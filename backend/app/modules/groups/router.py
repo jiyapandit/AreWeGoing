@@ -9,6 +9,7 @@ from db.models.user import User
 from app.modules.groups.schemas import (
     CreateGroupRequest,
     GroupMembersListResponse,
+    GroupMetricSnapshotResponse,
     GroupMetricsResponse,
     GroupResponse,
     InviteRequest,
@@ -23,12 +24,14 @@ from app.modules.groups.schemas import (
 from app.modules.groups.service import (
     accept_group_invite,
     create_group,
+    create_group_metric_snapshot,
     get_group_details,
     get_group_members,
     get_group_metrics,
     get_user_groups,
     join_group,
     list_group_invites,
+    list_group_metric_snapshots,
     list_user_invites,
     list_public_groups,
     process_invite_delivery_webhook,
@@ -133,6 +136,27 @@ def members(group_id: int, db: Session = Depends(get_db), current_user: User = D
 def metrics(group_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         return GroupMetricsResponse(**get_group_metrics(db, group_id, current_user.id))
+    except ValueError as e:
+        if str(e) == "FORBIDDEN":
+            raise HTTPException(status_code=403, detail="Not a member of this group")
+        raise
+
+
+@router.post("/{group_id}/metrics/snapshot", response_model=GroupMetricSnapshotResponse, status_code=201)
+def create_metrics_snapshot(group_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        return GroupMetricSnapshotResponse(**create_group_metric_snapshot(db, group_id, current_user.id))
+    except ValueError as e:
+        if str(e) == "FORBIDDEN":
+            raise HTTPException(status_code=403, detail="Not a member of this group")
+        raise
+
+
+@router.get("/{group_id}/metrics/history", response_model=list[GroupMetricSnapshotResponse])
+def metrics_history(group_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        rows = list_group_metric_snapshots(db, group_id, current_user.id)
+        return [GroupMetricSnapshotResponse(**row) for row in rows]
     except ValueError as e:
         if str(e) == "FORBIDDEN":
             raise HTTPException(status_code=403, detail="Not a member of this group")

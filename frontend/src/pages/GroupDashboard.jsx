@@ -31,6 +31,7 @@ export default function GroupDashboard() {
   const [members, setMembers] = useState([]);
   const [status, setStatus] = useState(null);
   const [metrics, setMetrics] = useState(null);
+  const [metricHistory, setMetricHistory] = useState([]);
   const [form, setForm] = useState(DEFAULT_FORM);
   const [itinerary, setItinerary] = useState(null);
   const [voteValue, setVoteValue] = useState("APPROVE");
@@ -105,11 +106,12 @@ export default function GroupDashboard() {
       setLoading(true);
       setToast({ message: "", type: "info" });
       try {
-        const [groupRes, membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
+        const [groupRes, membersRes, statusRes, metricsRes, metricHistoryRes, invitesRes, notificationsRes, meRes] = await Promise.all([
           axios.get(`${groupsApiBaseUrl}/${groupId}`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/metrics`, { headers: authHeaders }),
+          axios.get(`${groupsApiBaseUrl}/${groupId}/metrics/history`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/invites`, { headers: authHeaders }),
           axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
             headers: authHeaders,
@@ -121,6 +123,7 @@ export default function GroupDashboard() {
         setMembers(membersRes.data?.members || []);
         setStatus(statusRes.data);
         setMetrics(metricsRes.data);
+        setMetricHistory(metricHistoryRes.data || []);
         setInvites(invitesRes.data || []);
         setNotifications(notificationsRes.data || []);
         setCurrentUserId(meRes.data?.id || null);
@@ -174,10 +177,11 @@ export default function GroupDashboard() {
     setToast({ message: "", type: "info" });
     setLoading(true);
     try {
-      const [membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
+      const [membersRes, statusRes, metricsRes, metricHistoryRes, invitesRes, notificationsRes, meRes] = await Promise.all([
         axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/metrics`, { headers: authHeaders }),
+        axios.get(`${groupsApiBaseUrl}/${groupId}/metrics/history`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/invites`, { headers: authHeaders }),
         axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
           headers: authHeaders,
@@ -187,6 +191,7 @@ export default function GroupDashboard() {
       setMembers(membersRes.data?.members || []);
       setStatus(statusRes.data);
       setMetrics(metricsRes.data);
+      setMetricHistory(metricHistoryRes.data || []);
       setInvites(invitesRes.data || []);
       setNotifications(notificationsRes.data || []);
       setCurrentUserId(meRes.data?.id || null);
@@ -430,6 +435,17 @@ export default function GroupDashboard() {
     }
   }
 
+  async function captureMetricsSnapshot() {
+    setToast({ message: "", type: "info" });
+    try {
+      await axios.post(`${groupsApiBaseUrl}/${groupId}/metrics/snapshot`, {}, { headers: authHeaders });
+      setToast({ message: "Metrics snapshot captured.", type: "success" });
+      await refreshDashboard();
+    } catch {
+      setToast({ message: "Could not capture metrics snapshot.", type: "error" });
+    }
+  }
+
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
       <AppToast
@@ -512,6 +528,59 @@ export default function GroupDashboard() {
                   <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
                 </div>
               ))}
+        </section>
+        <section className="rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Metrics trend history</p>
+            <button
+              type="button"
+              onClick={captureMetricsSnapshot}
+              className="rounded-md border border-[#f3e7d4]/25 bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1]"
+            >
+              Capture snapshot
+            </button>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#e8dbc7]/80">Preference completion</p>
+              <div className="mt-2 flex items-end gap-1">
+                {metricHistory.slice(0, 8).reverse().map((point) => (
+                  <div
+                    key={`pref-${point.id}`}
+                    className="w-3 rounded-sm bg-emerald-300/60"
+                    style={{ height: `${Math.max(8, Number(point.preferenceCompletionPercent || 0)) / 2}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#e8dbc7]/80">Confidence score</p>
+              <div className="mt-2 flex items-end gap-1">
+                {metricHistory.slice(0, 8).reverse().map((point) => (
+                  <div
+                    key={`conf-${point.id}`}
+                    className="w-3 rounded-sm bg-sky-300/60"
+                    style={{ height: `${Math.max(8, Number(point.itineraryConfidenceScore || 0)) / 2}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#e8dbc7]/80">Conflict count</p>
+              <div className="mt-2 flex items-end gap-1">
+                {metricHistory.slice(0, 8).reverse().map((point) => (
+                  <div
+                    key={`conflict-${point.id}`}
+                    className="w-3 rounded-sm bg-amber-300/60"
+                    style={{ height: `${Math.max(8, Number(point.conflictCount || 0) * 14)}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          {metricHistory.length === 0 ? (
+            <p className="mt-2 text-xs text-[#d8ccb7]/80">No snapshots yet. Capture one to start tracking trends.</p>
+          ) : null}
         </section>
         <section className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-3">

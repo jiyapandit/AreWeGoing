@@ -7,6 +7,7 @@ from email.message import EmailMessage
 from sqlalchemy.orm import Session
 
 from db.models.group import Group
+from db.models.group_metric_snapshot import GroupMetricSnapshot
 from db.models.invite import Invite
 from db.models.invite_delivery_attempt import InviteDeliveryAttempt
 from db.models.membership import Membership
@@ -450,6 +451,62 @@ def get_group_metrics(db: Session, group_id: int, user_id: int):
         "itineraryConfidenceScore": itinerary_confidence,
         "approvalStatus": approval_status,
     }
+
+
+def create_group_metric_snapshot(db: Session, group_id: int, user_id: int):
+    metrics = get_group_metrics(db, group_id, user_id)
+    snapshot = GroupMetricSnapshot(
+        group_id=group_id,
+        captured_by=user_id,
+        group_size=metrics["groupSize"],
+        preference_completion_percent=metrics["preferenceCompletionPercent"],
+        budget_alignment_score=metrics["budgetAlignmentScore"],
+        activity_match_score=metrics["activityMatchScore"],
+        conflict_count=metrics["conflictCount"],
+        itinerary_confidence_score=metrics["itineraryConfidenceScore"],
+        approval_status=metrics["approvalStatus"],
+    )
+    db.add(snapshot)
+    db.commit()
+    db.refresh(snapshot)
+    return {
+        "id": snapshot.id,
+        "group_id": snapshot.group_id,
+        "groupSize": snapshot.group_size,
+        "preferenceCompletionPercent": snapshot.preference_completion_percent,
+        "budgetAlignmentScore": snapshot.budget_alignment_score,
+        "activityMatchScore": snapshot.activity_match_score,
+        "conflictCount": snapshot.conflict_count,
+        "itineraryConfidenceScore": snapshot.itinerary_confidence_score,
+        "approvalStatus": snapshot.approval_status,
+        "created_at": snapshot.created_at,
+    }
+
+
+def list_group_metric_snapshots(db: Session, group_id: int, user_id: int, limit: int = 15):
+    _ = get_group_metrics(db, group_id, user_id)
+    rows = (
+        db.query(GroupMetricSnapshot)
+        .filter(GroupMetricSnapshot.group_id == group_id)
+        .order_by(GroupMetricSnapshot.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": row.id,
+            "group_id": row.group_id,
+            "groupSize": row.group_size,
+            "preferenceCompletionPercent": row.preference_completion_percent,
+            "budgetAlignmentScore": row.budget_alignment_score,
+            "activityMatchScore": row.activity_match_score,
+            "conflictCount": row.conflict_count,
+            "itineraryConfidenceScore": row.itinerary_confidence_score,
+            "approvalStatus": row.approval_status,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
 
 
 def send_group_invite(db: Session, group_id: int, inviter_user_id: int, email: str):

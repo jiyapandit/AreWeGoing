@@ -10,3 +10,4 @@ from .vote import Vote
 from .notification import Notification
 from .invite import Invite
 from .invite_delivery_attempt import InviteDeliveryAttempt
+from .group_metric_snapshot import GroupMetricSnapshot

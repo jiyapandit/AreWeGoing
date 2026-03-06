@@ -311,3 +311,25 @@ def test_invite_delivery_webhook_and_status_tracking(client, monkeypatch):
     assert webhook_ok.status_code == 200
     assert webhook_ok.json()["delivery_status"] == "DELIVERED"
     assert webhook_ok.json()["delivery_provider_id"] == "provider-msg-123"
+
+
+def test_group_metrics_snapshot_history(client):
+    host_headers = register_and_login(client, "host-metrics@example.com")
+    outsider_headers = register_and_login(client, "outsider-metrics@example.com")
+
+    created = client.post("/api/v1/groups", json={"name": "Metrics Trend Trip", "is_public": False}, headers=host_headers)
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+
+    snapshot = client.post(f"/api/v1/groups/{group_id}/metrics/snapshot", headers=host_headers)
+    assert snapshot.status_code == 201
+    assert "preferenceCompletionPercent" in snapshot.json()
+    assert "itineraryConfidenceScore" in snapshot.json()
+
+    history = client.get(f"/api/v1/groups/{group_id}/metrics/history", headers=host_headers)
+    assert history.status_code == 200
+    assert isinstance(history.json(), list)
+    assert len(history.json()) >= 1
+
+    forbidden_snapshot = client.post(f"/api/v1/groups/{group_id}/metrics/snapshot", headers=outsider_headers)
+    assert_error_envelope(forbidden_snapshot, 403)
