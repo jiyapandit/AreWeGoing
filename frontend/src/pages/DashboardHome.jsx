@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Compass, Users } from "lucide-react";
+import { Compass, Home, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
@@ -66,7 +66,16 @@ export default function DashboardHome() {
                 Pick a trip to open full planning details, itinerary, votes, and host controls.
               </p>
             </div>
-            <div className="flex gap-2">
+            <nav aria-label="Dashboard quick actions" className="flex flex-wrap gap-2">
+              <Link
+                to="/landing"
+                className="rounded-2xl border border-white/30 bg-white/10 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-white/20"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Home className="h-4 w-4" />
+                  Landing
+                </span>
+              </Link>
               <Link
                 to="/create-group"
                 className="liquid-chip rounded-2xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
@@ -79,10 +88,11 @@ export default function DashboardHome() {
               >
                 Join trip
               </Link>
-            </div>
+            </nav>
           </div>
 
           {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
+          {loading ? <p className="mt-4 text-sm text-[#f1e7d7]/90">Loading your trips...</p> : null}
 
           <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {myGroups.map((group) => (

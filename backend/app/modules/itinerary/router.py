@@ -20,8 +20,8 @@ def generate(group_id: int, db: Session = Depends(get_db), current_user: User = 
             raise HTTPException(status_code=403, detail="Not a member of this group")
         if code == "GROUP_NOT_FOUND":
             raise HTTPException(status_code=404, detail="Group not found")
-        if code == "LOCKED":
-            raise HTTPException(status_code=409, detail="Itinerary is locked")
+        if code == "INVALID_STATE":
+            raise HTTPException(status_code=409, detail="Generation is allowed only when itinerary is in DRAFT state")
         if code == "CATALOG_EMPTY":
             raise HTTPException(status_code=409, detail="Catalog is empty")
         raise

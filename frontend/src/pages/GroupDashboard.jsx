@@ -1,8 +1,9 @@
 import axios from "axios";
-import { Bell, Mail, RefreshCcw, Users } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, Home, Mail, RefreshCcw, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import { FluidDropdown } from "@/components/ui/fluid-dropdown";
 
 function getAccessToken() {
   return (
@@ -60,6 +61,18 @@ export default function GroupDashboard() {
   const filteredNotifications = useMemo(
     () => notifications.filter((n) => !groupId || String(n.group_id) === String(groupId)).slice(0, 4),
     [notifications, groupId]
+  );
+  const itineraryState = itinerary?.state || "NOT_CREATED";
+  const canGenerateItinerary = itineraryState === "NOT_CREATED" || itineraryState === "DRAFT";
+  const canMoveToReview = itineraryState === "DRAFT";
+  const canVote = itineraryState === "REVIEW";
+  const canLock = isHost && itineraryState === "REVIEW";
+  const voteOptions = useMemo(
+    () => [
+      { id: "APPROVE", label: "Approve", icon: CheckCircle2, color: "#34D399" },
+      { id: "CHANGES", label: "Request Changes", icon: AlertTriangle, color: "#F59E0B" },
+    ],
+    []
   );
 
   useEffect(() => {
@@ -344,23 +357,40 @@ export default function GroupDashboard() {
                 Join code: <span className="tracking-[0.15em] text-[#fff7ea]">{group?.join_code || "-"}</span>
               </p>
             </div>
-            <button
-              type="button"
-              onClick={refreshDashboard}
-              className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-3 py-2 text-sm text-[#fff8eb]"
-            >
-              <span className="inline-flex items-center gap-2">
-                <RefreshCcw className="h-4 w-4" />
-                Refresh
-              </span>
-            </button>
-            <Link
-              to="/dashboard"
-              className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-3 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
-            >
-              All trips
-            </Link>
+            <nav aria-label="Group dashboard actions" className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={refreshDashboard}
+                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-3 py-2 text-sm text-[#fff8eb]"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <RefreshCcw className="h-4 w-4" />
+                  Refresh
+                </span>
+              </button>
+              <Link
+                to="/dashboard"
+                className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-3 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
+              >
+                All trips
+              </Link>
+              <Link
+                to="/landing"
+                className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-[#efe3d1] transition hover:bg-white/20"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Home className="h-4 w-4" />
+                  Landing
+                </span>
+              </Link>
+            </nav>
           </div>
+          <nav aria-label="Dashboard sections" className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/90">
+            <a href="#itinerary-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Itinerary</a>
+            <a href="#preferences-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Preferences</a>
+            <a href="#team-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Team</a>
+            <a href="#updates-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Updates</a>
+          </nav>
           {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
           {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}
         </section>
@@ -382,55 +412,74 @@ export default function GroupDashboard() {
         </section>
 
         <section className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
+          <section id="itinerary-section" className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
             <h2 className="font-serif text-3xl">Itinerary</h2>
             <p className="mt-2 text-sm text-[#f1e7d7]">
               State: <span className="text-[#fff7ea]">{itinerary?.state || "NOT_CREATED"}</span>
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={generateItinerary}
-                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
-              >
-                Generate
-              </button>
-              <button
-                type="button"
-                onClick={moveToReview}
-                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
-              >
-                Move to Review
-              </button>
-              <select
-                value={voteValue}
-                onChange={(e) => setVoteValue(e.target.value)}
-                className="rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none"
-              >
-                <option value="APPROVE">Approve</option>
-                <option value="CHANGES">Request Changes</option>
-              </select>
-              <button
-                type="button"
-                onClick={voteItinerary}
-                className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb]"
-              >
-                Vote
-              </button>
-              {isHost ? (
-                <button
-                  type="button"
-                  onClick={lockItineraryNow}
-                  className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60"
-                >
-                  Lock (Host)
-                </button>
-              ) : (
-                <span className="rounded-xl border border-[#f3e7d4]/20 bg-[#11151c]/25 px-4 py-2 text-sm text-[#bfb39f]">
-                  Lock available to host only
-                </span>
-              )}
+            <div className="mt-4 space-y-3">
+              <div className="rounded-xl border border-white/20 bg-white/5 p-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Planning actions</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={generateItinerary}
+                    disabled={!canGenerateItinerary || loading}
+                    className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Generate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={moveToReview}
+                    disabled={!canMoveToReview || loading}
+                    className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Move to Review
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/20 bg-white/5 p-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Review actions</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <FluidDropdown
+                    options={voteOptions}
+                    value={voteValue}
+                    onChange={setVoteValue}
+                    disabled={!canVote || loading}
+                    className="min-w-[14rem]"
+                  />
+                  <button
+                    type="button"
+                    onClick={voteItinerary}
+                    disabled={!canVote || loading}
+                    className="liquid-chip rounded-xl border border-[#f3e7d4]/30 px-4 py-2 text-sm text-[#fff8eb] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Vote
+                  </button>
+                  {isHost ? (
+                    <button
+                      type="button"
+                      onClick={lockItineraryNow}
+                      disabled={!canLock || loading}
+                      className="rounded-xl border border-[#f3e7d4]/30 bg-[#11151c]/45 px-4 py-2 text-sm text-[#efe3d1] transition hover:bg-[#161d27]/60 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Lock (Host)
+                    </button>
+                  ) : (
+                    <span className="rounded-xl border border-[#f3e7d4]/20 bg-[#11151c]/25 px-4 py-2 text-sm text-[#bfb39f]">
+                      Lock available to host only
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
+            <p className="mt-2 text-xs text-[#e8dbc7]/80">
+              {itineraryState === "NOT_CREATED" ? "Generate to start planning." : null}
+              {itineraryState === "DRAFT" ? "Draft ready. Move to review when the group is ready to vote." : null}
+              {itineraryState === "REVIEW" ? "Review open. Members can vote; host can lock after review." : null}
+              {itineraryState === "LOCKED" ? "Itinerary is locked. Generation and voting are disabled." : null}
+            </p>
 
             <div className="mt-4 space-y-3">
               {itinerary?.days?.slice(0, 2).map((day) => (
@@ -457,6 +506,7 @@ export default function GroupDashboard() {
           </section>
 
           <form
+            id="preferences-section"
             onSubmit={submitPreferences}
             className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 space-y-4"
           >
@@ -527,7 +577,7 @@ export default function GroupDashboard() {
           </form>
         </section>
 
-        <section className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
+        <section id="team-section" className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
           <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 xl:col-span-2">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -641,7 +691,7 @@ export default function GroupDashboard() {
           </section>
         </section>
 
-        <section className="dashboard-section">
+        <section id="updates-section" className="dashboard-section">
           <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
