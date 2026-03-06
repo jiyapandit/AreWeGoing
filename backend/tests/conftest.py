@@ -39,5 +39,6 @@ def client():
         yield test_client
 
     app.dependency_overrides.clear()
+    db_session.engine.dispose()
     if test_db_path.exists():
         test_db_path.unlink()

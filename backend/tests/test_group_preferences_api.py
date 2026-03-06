@@ -6,6 +6,13 @@ def register_and_login(client, email: str, password: str = "Password123"):
     token = login_res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
+def assert_error_envelope(response, expected_status: int):
+    assert response.status_code == expected_status
+    payload = response.json()
+    assert set(payload.keys()) == {"errorCode", "message", "details"}
+    assert isinstance(payload["errorCode"], str)
+    assert isinstance(payload["message"], str)
+
 
 def test_groups_preferences_status_codes(client):
     host_headers = register_and_login(client, "host@example.com")
@@ -17,7 +24,7 @@ def test_groups_preferences_status_codes(client):
         json={"name": "Trip Alpha", "is_public": False},
         headers={"Authorization": "Bearer badtoken"},
     )
-    assert unauthorized.status_code == 401
+    assert_error_envelope(unauthorized, 401)
 
     created = client.post("/api/v1/groups", json={"name": "Trip Alpha", "is_public": False}, headers=host_headers)
     assert created.status_code == 201
@@ -26,13 +33,13 @@ def test_groups_preferences_status_codes(client):
     join_code = group["join_code"]
 
     join_not_found = client.post("/api/v1/groups/join", json={"join_code": "NOPE1234"}, headers=member_headers)
-    assert join_not_found.status_code == 404
+    assert_error_envelope(join_not_found, 404)
 
     join_ok = client.post("/api/v1/groups/join", json={"join_code": join_code}, headers=member_headers)
     assert join_ok.status_code == 200
 
     join_conflict = client.post("/api/v1/groups/join", json={"join_code": join_code}, headers=member_headers)
-    assert join_conflict.status_code == 409
+    assert_error_envelope(join_conflict, 409)
 
     pref_forbidden = client.put(
         f"/api/v1/groups/{group_id}/preferences",
@@ -48,7 +55,7 @@ def test_groups_preferences_status_codes(client):
         },
         headers=outsider_headers,
     )
-    assert pref_forbidden.status_code == 403
+    assert_error_envelope(pref_forbidden, 403)
 
     pref_ok = client.put(
         f"/api/v1/groups/{group_id}/preferences",
@@ -93,7 +100,7 @@ def test_public_join_request_host_approve_reject(client):
         json={"status": "ACTIVE"},
         headers=outsider_headers,
     )
-    assert non_host_update.status_code == 403
+    assert_error_envelope(non_host_update, 403)
 
     host_approve = client.patch(
         f"/api/v1/groups/{group_id}/members/{membership_id}/status",
@@ -107,3 +114,46 @@ def test_public_join_request_host_approve_reject(client):
     assert members.status_code == 200
     pending = [m for m in members.json()["members"] if m["status"] == "PENDING"]
     assert len(pending) == 0
+
+
+def test_members_and_preferences_error_paths(client):
+    host_headers = register_and_login(client, "host3@example.com")
+    member_headers = register_and_login(client, "member3@example.com")
+    outsider_headers = register_and_login(client, "outsider3@example.com")
+
+    created = client.post("/api/v1/groups", json={"name": "Edge Trip", "is_public": True}, headers=host_headers)
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+    join_code = created.json()["join_code"]
+
+    join_ok = client.post("/api/v1/groups/join", json={"join_code": join_code}, headers=member_headers)
+    assert join_ok.status_code == 200
+
+    members_unauthorized = client.get(
+        f"/api/v1/groups/{group_id}/members",
+        headers={"Authorization": "Bearer badtoken"},
+    )
+    assert_error_envelope(members_unauthorized, 401)
+
+    members_forbidden = client.get(f"/api/v1/groups/{group_id}/members", headers=outsider_headers)
+    assert_error_envelope(members_forbidden, 403)
+
+    pref_me_not_found = client.get(f"/api/v1/groups/{group_id}/preferences/me", headers=host_headers)
+    assert_error_envelope(pref_me_not_found, 404)
+
+    pref_status_forbidden = client.get(f"/api/v1/groups/{group_id}/preferences/status", headers=outsider_headers)
+    assert_error_envelope(pref_status_forbidden, 403)
+
+    missing_membership_update = client.patch(
+        f"/api/v1/groups/{group_id}/members/999999/status",
+        json={"status": "ACTIVE"},
+        headers=host_headers,
+    )
+    assert_error_envelope(missing_membership_update, 404)
+
+    duplicate_join_request = client.post(f"/api/v1/groups/{group_id}/join-request", headers=member_headers)
+    assert_error_envelope(duplicate_join_request, 409)
+
+    invalid_payload = client.post("/api/v1/groups", json={"name": "", "is_public": False}, headers=host_headers)
+    assert_error_envelope(invalid_payload, 422)
+    assert invalid_payload.json()["errorCode"] == "VALIDATION_ERROR"
