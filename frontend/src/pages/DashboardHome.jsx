@@ -1,5 +1,5 @@
 import axios from "axios";
-import { CheckCircle2, Compass, Home, Mail, Users } from "lucide-react";
+import { Bell, CheckCircle2, Compass, Home, Mail, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
@@ -16,14 +16,24 @@ export default function DashboardHome() {
   const token = getAccessToken();
   const [myGroups, setMyGroups] = useState([]);
   const [myInvites, setMyInvites] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [acceptingInviteId, setAcceptingInviteId] = useState(null);
+  const [readingNotificationId, setReadingNotificationId] = useState(null);
   const [toast, setToast] = useState({ message: "", type: "info" });
 
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
   const groupsApiBaseUrl = useMemo(
     () => (rawApiBaseUrl.endsWith("/api/v1") ? `${rawApiBaseUrl}/groups` : `${rawApiBaseUrl}/api/v1/groups`),
     [rawApiBaseUrl]
+  );
+  const notificationsApiBaseUrl = useMemo(
+    () => (rawApiBaseUrl.endsWith("/api/v1") ? `${rawApiBaseUrl}/notifications` : `${rawApiBaseUrl}/api/v1/notifications`),
+    [rawApiBaseUrl]
+  );
+  const unreadNotifications = useMemo(
+    () => notifications.filter((notification) => !notification.is_read).length,
+    [notifications]
   );
 
   useEffect(() => {
@@ -33,7 +43,7 @@ export default function DashboardHome() {
       setLoading(true);
       setToast({ message: "", type: "info" });
       try {
-        const [groupsRes, invitesRes] = await Promise.all([
+        const [groupsRes, invitesRes, notificationsRes] = await Promise.all([
           axios.get(`${groupsApiBaseUrl}/my`, {
             headers: { Authorization: `Bearer ${token}` },
             timeout: 10000,
@@ -42,10 +52,15 @@ export default function DashboardHome() {
             headers: { Authorization: `Bearer ${token}` },
             timeout: 10000,
           }),
+          axios.get(notificationsApiBaseUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 10000,
+          }),
         ]);
         if (isMounted) {
           setMyGroups(Array.isArray(groupsRes.data) ? groupsRes.data : []);
           setMyInvites(Array.isArray(invitesRes.data) ? invitesRes.data : []);
+          setNotifications(Array.isArray(notificationsRes.data) ? notificationsRes.data : []);
         }
       } catch {
         if (isMounted) setToast({ message: "Could not load your dashboard data. Please sign in again.", type: "error" });
@@ -57,7 +72,7 @@ export default function DashboardHome() {
     return () => {
       isMounted = false;
     };
-  }, [groupsApiBaseUrl, token]);
+  }, [groupsApiBaseUrl, notificationsApiBaseUrl, token]);
 
   async function acceptInvite(inviteId) {
     setToast({ message: "", type: "info" });
@@ -83,6 +98,27 @@ export default function DashboardHome() {
       }
     } finally {
       setAcceptingInviteId(null);
+    }
+  }
+
+  async function markNotificationAsRead(notificationId) {
+    if (!token) return;
+    setReadingNotificationId(notificationId);
+    try {
+      await axios.patch(
+        `${notificationsApiBaseUrl}/${notificationId}/read`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
+      );
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === notificationId ? { ...notification, is_read: true } : notification
+        )
+      );
+    } catch {
+      setToast({ message: "Could not mark notification as read.", type: "error" });
+    } finally {
+      setReadingNotificationId(null);
     }
   }
 
@@ -172,6 +208,56 @@ export default function DashboardHome() {
                       {acceptingInviteId === invite.id ? "Accepting..." : "Accept invite"}
                     </span>
                   </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <div className="mb-3 flex items-center gap-2 text-[#f0e4d0]">
+              <Bell className="h-4 w-4" />
+              <p className="text-xs uppercase tracking-[0.16em]">Notifications ({unreadNotifications} unread)</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {loading
+                ? Array.from({ length: 2 }).map((_, index) => (
+                    <div key={`notification-skeleton-${index}`} className="skeleton-card">
+                      <div className="skeleton-block h-5 w-4/5" />
+                      <div className="mt-2 skeleton-block h-4 w-2/3" />
+                      <div className="mt-4 skeleton-block h-4 w-1/2" />
+                    </div>
+                  ))
+                : null}
+              {!loading && notifications.length === 0 ? (
+                <div className="trip-card p-4">
+                  <p className="text-sm text-[#e8dcc8]/90">No notifications.</p>
+                </div>
+              ) : null}
+              {notifications.slice(0, 6).map((notification) => (
+                <div key={notification.id} className="trip-card p-4">
+                  <p className="text-sm text-[#fff7ea]">{notification.message}</p>
+                  <p className="mt-2 text-[11px] uppercase tracking-[0.15em] text-[#e8dbc7]/80">{notification.kind}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <span
+                      className={`rounded-md px-2 py-1 text-[11px] uppercase tracking-[0.12em] ${
+                        notification.is_read
+                          ? "border border-white/25 bg-white/8 text-[#d8ccb7]"
+                          : "border border-amber-300/35 bg-amber-500/15 text-amber-100"
+                      }`}
+                    >
+                      {notification.is_read ? "Read" : "Unread"}
+                    </span>
+                    {!notification.is_read ? (
+                      <button
+                        type="button"
+                        disabled={readingNotificationId === notification.id}
+                        onClick={() => markNotificationAsRead(notification.id)}
+                        className="rounded-lg border border-white/25 bg-white/8 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {readingNotificationId === notification.id ? "Saving..." : "Mark read"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

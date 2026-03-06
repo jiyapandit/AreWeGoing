@@ -50,11 +50,21 @@ test("requester sees rejected state after host rejects public join request", asy
   await expect(pendingPanel.locator('[data-testid^="pending-request-"]').filter({ hasText: requesterEmail })).toHaveCount(0);
 
   await requesterPage.goto("/dashboard");
-  const rejectedCard = requesterPage.locator("div.trip-card").filter({ hasText: groupName }).first();
+  const rejectedCard = requesterPage
+    .locator("div.trip-card")
+    .filter({ hasText: groupName })
+    .filter({ hasText: "MEMBER / REJECTED" })
+    .first();
   await expect(rejectedCard).toBeVisible();
   await expect(rejectedCard.getByText("MEMBER / REJECTED")).toBeVisible();
   await expect(rejectedCard.getByText("Request declined by host")).toBeVisible();
   await expect(requesterPage.locator("a.trip-card").filter({ hasText: groupName })).toHaveCount(0);
+
+  const notificationCard = requesterPage.locator("div.trip-card").filter({ hasText: "JOIN_REQUEST_REJECTED" }).first();
+  await expect(notificationCard).toBeVisible();
+  await expect(notificationCard.getByText("Unread")).toBeVisible();
+  await notificationCard.getByRole("button", { name: "Mark read" }).click();
+  await expect(notificationCard.getByText("Read")).toBeVisible();
 
   await requesterContext.close();
   await hostContext.close();
