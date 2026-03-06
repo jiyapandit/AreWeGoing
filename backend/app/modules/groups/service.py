@@ -1,4 +1,7 @@
 import secrets
+import os
+import smtplib
+from email.message import EmailMessage
 from sqlalchemy.orm import Session
 
 from db.models.group import Group
@@ -9,6 +12,39 @@ from db.models.preference import Preference
 from db.models.itinerary import Itinerary
 from db.models.vote import Vote
 from db.models.user import User
+
+
+def _try_send_invite_email(group: Group, recipient_email: str):
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM")
+    app_base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
+
+    if not smtp_host or not smtp_from:
+        return
+
+    invite_link = f"{app_base_url.rstrip('/')}/join-group?code={group.join_code}"
+    message = EmailMessage()
+    message["Subject"] = f'Invite to join "{group.name}"'
+    message["From"] = smtp_from
+    message["To"] = recipient_email
+    message.set_content(
+        f'You were invited to join "{group.name}".\n'
+        f"Join code: {group.join_code}\n"
+        f"Join link: {invite_link}\n"
+    )
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.send_message(message)
+    except Exception:
+        # Email delivery is best-effort; invite/notification flow should not fail because SMTP is unavailable.
+        return
 
 
 def _generate_join_code() -> str:
@@ -249,6 +285,8 @@ def get_group_metrics(db: Session, group_id: int, user_id: int):
             "budgetAlignmentScore": 0,
             "activityMatchScore": 0,
             "conflictCount": 0,
+            "budgetConflict": False,
+            "transportConflict": False,
             "itineraryConfidenceScore": 0,
             "approvalStatus": "NOT_STARTED",
         }
@@ -307,6 +345,8 @@ def get_group_metrics(db: Session, group_id: int, user_id: int):
         "budgetAlignmentScore": budget_alignment_score,
         "activityMatchScore": activity_match_score,
         "conflictCount": conflict_count,
+        "budgetConflict": budget_conflicts > 0,
+        "transportConflict": transport_conflicts > 0,
         "itineraryConfidenceScore": itinerary_confidence,
         "approvalStatus": approval_status,
     }
@@ -342,6 +382,7 @@ def send_group_invite(db: Session, group_id: int, inviter_user_id: int, email: s
 
     db.commit()
     db.refresh(invite)
+    _try_send_invite_email(group, invite.email)
     return invite
 
 

@@ -44,6 +44,7 @@ export default function GroupDashboard() {
   const [membershipActionId, setMembershipActionId] = useState(null);
   const [inviteStatusFilter, setInviteStatusFilter] = useState("ALL");
   const [inviteActionId, setInviteActionId] = useState(null);
+  const [readingNotificationId, setReadingNotificationId] = useState(null);
   const [toast, setToast] = useState({ message: "", type: "info" });
 
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -71,6 +72,10 @@ export default function GroupDashboard() {
   const filteredNotifications = useMemo(
     () => notifications.filter((n) => !groupId || String(n.group_id) === String(groupId)).slice(0, 4),
     [notifications, groupId]
+  );
+  const unreadNotifications = useMemo(
+    () => filteredNotifications.filter((notification) => !notification.is_read).length,
+    [filteredNotifications]
   );
   const visibleInvites = useMemo(() => {
     if (inviteStatusFilter === "ALL") return invites;
@@ -404,6 +409,27 @@ export default function GroupDashboard() {
     }
   }
 
+  async function markNotificationAsRead(notificationId) {
+    setToast({ message: "", type: "info" });
+    setReadingNotificationId(notificationId);
+    try {
+      await axios.patch(
+        `${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications/${notificationId}/read`,
+        {},
+        { headers: authHeaders }
+      );
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === notificationId ? { ...notification, is_read: true } : notification
+        )
+      );
+    } catch {
+      setToast({ message: "Could not mark notification as read.", type: "error" });
+    } finally {
+      setReadingNotificationId(null);
+    }
+  }
+
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
       <AppToast
@@ -487,6 +513,20 @@ export default function GroupDashboard() {
                 </div>
               ))}
         </section>
+        <section className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-3">
+            <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Budget conflict</p>
+            <p className="mt-1 text-sm text-[#f1e7d7]">
+              {metrics?.budgetConflict ? "Detected: group budgets have no overlap." : "No conflict detected."}
+            </p>
+          </div>
+          <div className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-3">
+            <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Transport conflict</p>
+            <p className="mt-1 text-sm text-[#f1e7d7]">
+              {metrics?.transportConflict ? "Detected: members selected different transport modes." : "No conflict detected."}
+            </p>
+          </div>
+        </section>
 
         <section className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
           <section id="itinerary-section" className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
@@ -494,6 +534,12 @@ export default function GroupDashboard() {
             <p className="mt-2 text-sm text-[#f1e7d7]">
               State: <span className="text-[#fff7ea]">{itinerary?.state || "NOT_CREATED"}</span>
             </p>
+            {itinerary?.vote_summary ? (
+              <p className="mt-1 text-xs text-[#e8dbc7]/85">
+                Votes: {itinerary.vote_summary.approve ?? 0} approve / {itinerary.vote_summary.changes ?? 0} changes
+                {" "}({itinerary.vote_summary.total ?? 0} total)
+              </p>
+            ) : null}
             <div className="mt-4 space-y-3">
               <div className="rounded-xl border border-white/20 bg-white/5 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Planning actions</p>
@@ -869,6 +915,9 @@ export default function GroupDashboard() {
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
               <h2 className="font-serif text-3xl">Notifications</h2>
+              <span className="rounded-full border border-white/25 bg-white/10 px-2 py-0.5 text-xs text-[#f1e7d7]">
+                {unreadNotifications} unread
+              </span>
             </div>
             <div className="mt-4 space-y-2">
               {filteredNotifications.map((notification) => (
@@ -876,8 +925,26 @@ export default function GroupDashboard() {
                     key={notification.id}
                     className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
                   >
-                    <p className="text-sm text-[#f7efdf]">{notification.message}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{notification.kind}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm text-[#f7efdf]">{notification.message}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{notification.kind}</p>
+                      </div>
+                      {notification.is_read ? (
+                        <span className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-[11px] text-[#d8ccb7]">
+                          Read
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={readingNotificationId === notification.id}
+                          onClick={() => markNotificationAsRead(notification.id)}
+                          className="rounded-md border border-[#f3e7d4]/25 bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {readingNotificationId === notification.id ? "Saving..." : "Mark read"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               {filteredNotifications.length === 0 ? <p className="text-sm text-[#e8dbc7]/80">No notifications.</p> : null}

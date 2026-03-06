@@ -48,6 +48,8 @@ class GroupMetricsResponse(BaseModel):
     budgetAlignmentScore: int
     activityMatchScore: int
     conflictCount: int
+    budgetConflict: bool
+    transportConflict: bool
     itineraryConfidenceScore: int
     approvalStatus: str
 
