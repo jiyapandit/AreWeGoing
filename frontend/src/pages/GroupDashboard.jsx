@@ -1,8 +1,9 @@
 import axios from "axios";
-import { Bell, Home, Mail, RefreshCcw, Users } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, Home, Mail, RefreshCcw, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import { FluidDropdown } from "@/components/ui/fluid-dropdown";
 
 function getAccessToken() {
   return (
@@ -66,6 +67,13 @@ export default function GroupDashboard() {
   const canMoveToReview = itineraryState === "DRAFT";
   const canVote = itineraryState === "REVIEW";
   const canLock = isHost && itineraryState === "REVIEW";
+  const voteOptions = useMemo(
+    () => [
+      { id: "APPROVE", label: "Approve", icon: CheckCircle2, color: "#34D399" },
+      { id: "CHANGES", label: "Request Changes", icon: AlertTriangle, color: "#F59E0B" },
+    ],
+    []
+  );
 
   useEffect(() => {
     if (!authToken) {
@@ -434,16 +442,13 @@ export default function GroupDashboard() {
               <div className="rounded-xl border border-white/20 bg-white/5 p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Review actions</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <select
-                    aria-label="Select vote value"
+                  <FluidDropdown
+                    options={voteOptions}
                     value={voteValue}
-                    onChange={(e) => setVoteValue(e.target.value)}
+                    onChange={setVoteValue}
                     disabled={!canVote || loading}
-                    className="rounded-xl border border-[#f1e6d6]/35 bg-[#14171d]/55 px-3 py-2 text-[#f8f2e7] outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <option value="APPROVE">Approve</option>
-                    <option value="CHANGES">Request Changes</option>
-                  </select>
+                    className="min-w-[14rem]"
+                  />
                   <button
                     type="button"
                     onClick={voteItinerary}
