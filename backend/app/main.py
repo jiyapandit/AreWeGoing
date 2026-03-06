@@ -3,10 +3,10 @@ from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
-from db.base import Base
+from sqlalchemy.exc import SQLAlchemyError
 from db.session import engine
-from sqlalchemy import text
 from app.modules.auth.router import router as auth_router
 from app.modules.groups.router import router as groups_router
 from app.modules.preferences.router import router as preferences_router
@@ -14,7 +14,6 @@ from app.modules.catalog.router import router as catalog_router
 from app.modules.itinerary.router import router as itinerary_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.catalog.service import seed_catalog_if_empty
-from db.models import User, Group, Membership, Preference, CatalogItem, Itinerary, ItineraryDay, ItineraryItem, Vote, Notification, Invite
 
 app = FastAPI(title="AreWeGoing API", version="0.1.0")
 
@@ -41,10 +40,12 @@ app.include_router(notifications_router)
 
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)
+    # Runtime schema creation is intentionally disabled.
+    # Database schema must be managed through Alembic migrations.
     db = Session(engine)
     try:
-        seed_catalog_if_empty(db)
+        if inspect(engine).has_table("catalog_items"):
+            seed_catalog_if_empty(db)
     finally:
         db.close()
 
@@ -97,6 +98,35 @@ async def unhandled_exception_handler(_, __):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    checks = {"database": "fail", "schema": "fail"}
+    details = {}
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except SQLAlchemyError:
+        details["database"] = "Could not connect to database"
+
+    try:
+        inspector = inspect(engine)
+        required_tables = ["users", "groups", "memberships", "preferences", "catalog_items"]
+        missing_tables = [table for table in required_tables if not inspector.has_table(table)]
+        if missing_tables:
+            details["schema"] = {"missing_tables": missing_tables}
+        else:
+            checks["schema"] = "ok"
+    except SQLAlchemyError:
+        details["schema"] = "Could not inspect schema"
+
+    is_ready = checks["database"] == "ok" and checks["schema"] == "ok"
+    if not is_ready:
+        return JSONResponse(status_code=503, content={"status": "not_ready", "checks": checks, "details": details})
+    return {"status": "ready", "checks": checks}
+
 
 @app.get("/db-check")
 def db_check():
