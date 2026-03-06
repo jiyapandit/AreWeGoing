@@ -3,7 +3,6 @@ import { Compass, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import { CustomColorDemo, DefaultDemo } from "@/components/ui/expandable-tabs-demo";
 
 function getAccessToken() {
   return (
@@ -50,13 +49,15 @@ export default function DashboardHome() {
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
       <div className="group-bg-gradient-join absolute inset-0" />
+      <div className="scene-photo-wash-dashboard absolute inset-0 opacity-36" />
+      <div className="group-cinematic-vignette absolute inset-0" />
       <div className="group-orb-a absolute -left-24 top-10 h-[22rem] w-[22rem] rounded-full login-float-fast" />
       <div className="group-orb-b absolute -right-24 bottom-10 h-[24rem] w-[24rem] rounded-full login-float-slow" />
       <div className="absolute inset-0 grain" />
 
       <Navbar />
       <main className="relative z-10 mx-auto max-w-6xl px-6 pb-16 pt-6 md:pt-10">
-        <section className="dashboard-section group-panel rounded-[2rem] border border-[#efe4d0]/35 p-6 md:p-8">
+        <section className="dashboard-section group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 md:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-[#f0e4d0]/85">Dashboard</p>
@@ -82,17 +83,6 @@ export default function DashboardHome() {
           </div>
 
           {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
-
-          <div className="mt-6 grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-4">
-              <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Quick Controls</p>
-              <DefaultDemo />
-            </div>
-            <div className="rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-4">
-              <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[#e8dbc7]/75">Workspace</p>
-              <CustomColorDemo />
-            </div>
-          </div>
 
           <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {myGroups.map((group) => (
