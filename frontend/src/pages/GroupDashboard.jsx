@@ -31,6 +31,7 @@ export default function GroupDashboard() {
   const [members, setMembers] = useState([]);
   const [status, setStatus] = useState(null);
   const [metrics, setMetrics] = useState(null);
+  const [metricHistory, setMetricHistory] = useState([]);
   const [form, setForm] = useState(DEFAULT_FORM);
   const [itinerary, setItinerary] = useState(null);
   const [voteValue, setVoteValue] = useState("APPROVE");
@@ -42,7 +43,9 @@ export default function GroupDashboard() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [memberStatusFilter, setMemberStatusFilter] = useState("ALL");
   const [membershipActionId, setMembershipActionId] = useState(null);
+  const [membershipBulkAction, setMembershipBulkAction] = useState("");
   const [inviteStatusFilter, setInviteStatusFilter] = useState("ALL");
+  const [inviteDeliveryFilter, setInviteDeliveryFilter] = useState("ALL");
   const [inviteActionId, setInviteActionId] = useState(null);
   const [readingNotificationId, setReadingNotificationId] = useState(null);
   const [toast, setToast] = useState({ message: "", type: "info" });
@@ -63,6 +66,10 @@ export default function GroupDashboard() {
     [members, currentUserId]
   );
   const pendingMembers = useMemo(() => members.filter((member) => member.status === "PENDING"), [members]);
+  const sortedPendingMembers = useMemo(
+    () => [...pendingMembers].sort((a, b) => String(a.email || "").localeCompare(String(b.email || ""))),
+    [pendingMembers]
+  );
   const activeMembers = useMemo(() => members.filter((member) => member.status === "ACTIVE"), [members]);
   const rejectedMembers = useMemo(() => members.filter((member) => member.status === "REJECTED"), [members]);
   const visibleMembers = useMemo(() => {
@@ -78,9 +85,12 @@ export default function GroupDashboard() {
     [filteredNotifications]
   );
   const visibleInvites = useMemo(() => {
-    if (inviteStatusFilter === "ALL") return invites;
-    return invites.filter((invite) => invite.status === inviteStatusFilter);
-  }, [invites, inviteStatusFilter]);
+    return invites.filter((invite) => {
+      const statusMatch = inviteStatusFilter === "ALL" || invite.status === inviteStatusFilter;
+      const deliveryMatch = inviteDeliveryFilter === "ALL" || (invite.delivery_status || "PENDING") === inviteDeliveryFilter;
+      return statusMatch && deliveryMatch;
+    });
+  }, [invites, inviteDeliveryFilter, inviteStatusFilter]);
   const itineraryState = itinerary?.state || "NOT_CREATED";
   const canGenerateItinerary = itineraryState === "NOT_CREATED" || itineraryState === "DRAFT";
   const canMoveToReview = itineraryState === "DRAFT";
@@ -105,11 +115,12 @@ export default function GroupDashboard() {
       setLoading(true);
       setToast({ message: "", type: "info" });
       try {
-        const [groupRes, membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
+        const [groupRes, membersRes, statusRes, metricsRes, metricHistoryRes, invitesRes, notificationsRes, meRes] = await Promise.all([
           axios.get(`${groupsApiBaseUrl}/${groupId}`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/metrics`, { headers: authHeaders }),
+          axios.get(`${groupsApiBaseUrl}/${groupId}/metrics/history`, { headers: authHeaders }),
           axios.get(`${groupsApiBaseUrl}/${groupId}/invites`, { headers: authHeaders }),
           axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
             headers: authHeaders,
@@ -121,6 +132,7 @@ export default function GroupDashboard() {
         setMembers(membersRes.data?.members || []);
         setStatus(statusRes.data);
         setMetrics(metricsRes.data);
+        setMetricHistory(metricHistoryRes.data || []);
         setInvites(invitesRes.data || []);
         setNotifications(notificationsRes.data || []);
         setCurrentUserId(meRes.data?.id || null);
@@ -174,10 +186,11 @@ export default function GroupDashboard() {
     setToast({ message: "", type: "info" });
     setLoading(true);
     try {
-      const [membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
+      const [membersRes, statusRes, metricsRes, metricHistoryRes, invitesRes, notificationsRes, meRes] = await Promise.all([
         axios.get(`${groupsApiBaseUrl}/${groupId}/members`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/preferences/status`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/metrics`, { headers: authHeaders }),
+        axios.get(`${groupsApiBaseUrl}/${groupId}/metrics/history`, { headers: authHeaders }),
         axios.get(`${groupsApiBaseUrl}/${groupId}/invites`, { headers: authHeaders }),
         axios.get(`${rawApiBaseUrl.endsWith("/api/v1") ? rawApiBaseUrl : `${rawApiBaseUrl}/api/v1`}/notifications`, {
           headers: authHeaders,
@@ -187,6 +200,7 @@ export default function GroupDashboard() {
       setMembers(membersRes.data?.members || []);
       setStatus(statusRes.data);
       setMetrics(metricsRes.data);
+      setMetricHistory(metricHistoryRes.data || []);
       setInvites(invitesRes.data || []);
       setNotifications(notificationsRes.data || []);
       setCurrentUserId(meRes.data?.id || null);
@@ -369,6 +383,44 @@ export default function GroupDashboard() {
     }
   }
 
+  async function updateAllPendingMemberships(nextStatus) {
+    setToast({ message: "", type: "info" });
+    if (!isHost) {
+      setToast({ message: "Only host can update join requests.", type: "error" });
+      return;
+    }
+    if (!sortedPendingMembers.length) {
+      setToast({ message: "No pending requests to update.", type: "info" });
+      return;
+    }
+
+    setMembershipBulkAction(nextStatus);
+    try {
+      let updatedCount = 0;
+      for (const member of sortedPendingMembers) {
+        try {
+          await axios.patch(
+            `${groupsApiBaseUrl}/${groupId}/members/${member.membership_id}/status`,
+            { status: nextStatus },
+            { headers: authHeaders }
+          );
+          updatedCount += 1;
+        } catch {
+          // Continue with the remaining requests and show summarized result.
+        }
+      }
+      await refreshDashboard();
+      if (updatedCount === 0) {
+        setToast({ message: "Could not update pending requests.", type: "error" });
+      } else {
+        const actionWord = nextStatus === "ACTIVE" ? "approved" : "rejected";
+        setToast({ message: `${updatedCount} pending request(s) ${actionWord}.`, type: "success" });
+      }
+    } finally {
+      setMembershipBulkAction("");
+    }
+  }
+
   async function submitPreferences(event) {
     event.preventDefault();
     setSaving(true);
@@ -427,6 +479,17 @@ export default function GroupDashboard() {
       setToast({ message: "Could not mark notification as read.", type: "error" });
     } finally {
       setReadingNotificationId(null);
+    }
+  }
+
+  async function captureMetricsSnapshot() {
+    setToast({ message: "", type: "info" });
+    try {
+      await axios.post(`${groupsApiBaseUrl}/${groupId}/metrics/snapshot`, {}, { headers: authHeaders });
+      setToast({ message: "Metrics snapshot captured.", type: "success" });
+      await refreshDashboard();
+    } catch {
+      setToast({ message: "Could not capture metrics snapshot.", type: "error" });
     }
   }
 
@@ -512,6 +575,59 @@ export default function GroupDashboard() {
                   <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
                 </div>
               ))}
+        </section>
+        <section className="rounded-2xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-[0.14em] text-[#e8dbc7]/85">Metrics trend history</p>
+            <button
+              type="button"
+              onClick={captureMetricsSnapshot}
+              className="rounded-md border border-[#f3e7d4]/25 bg-white/8 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#efe3d1]"
+            >
+              Capture snapshot
+            </button>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#e8dbc7]/80">Preference completion</p>
+              <div className="mt-2 flex items-end gap-1">
+                {metricHistory.slice(0, 8).reverse().map((point) => (
+                  <div
+                    key={`pref-${point.id}`}
+                    className="w-3 rounded-sm bg-emerald-300/60"
+                    style={{ height: `${Math.max(8, Number(point.preferenceCompletionPercent || 0)) / 2}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#e8dbc7]/80">Confidence score</p>
+              <div className="mt-2 flex items-end gap-1">
+                {metricHistory.slice(0, 8).reverse().map((point) => (
+                  <div
+                    key={`conf-${point.id}`}
+                    className="w-3 rounded-sm bg-sky-300/60"
+                    style={{ height: `${Math.max(8, Number(point.itineraryConfidenceScore || 0)) / 2}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#e8dbc7]/80">Conflict count</p>
+              <div className="mt-2 flex items-end gap-1">
+                {metricHistory.slice(0, 8).reverse().map((point) => (
+                  <div
+                    key={`conflict-${point.id}`}
+                    className="w-3 rounded-sm bg-amber-300/60"
+                    style={{ height: `${Math.max(8, Number(point.conflictCount || 0) * 14)}px` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          {metricHistory.length === 0 ? (
+            <p className="mt-2 text-xs text-[#d8ccb7]/80">No snapshots yet. Capture one to start tracking trends.</p>
+          ) : null}
         </section>
         <section className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 p-3">
@@ -701,7 +817,7 @@ export default function GroupDashboard() {
         </section>
 
         <section id="team-section" className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
-          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 xl:col-span-2">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6 xl:col-span-2" data-testid="group-members-panel">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               <h2 className="font-serif text-3xl">Group members</h2>
@@ -762,6 +878,7 @@ export default function GroupDashboard() {
                 return (
                   <div
                     key={member.id}
+                    data-testid={`group-member-${member.id}`}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
                   >
                     <div>
@@ -787,13 +904,39 @@ export default function GroupDashboard() {
               ) : null}
             </div>
           </section>
-          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6">
+          <section className="group-panel group-panel-dashboard rounded-[2rem] border border-[#efe4d0]/35 p-6" data-testid="pending-requests-panel">
             <h2 className="font-serif text-3xl">Pending join requests</h2>
             {!isHost ? <p className="mt-2 text-xs text-[#bfb39f]">Only host can manage requests.</p> : null}
+            {isHost ? (
+              <p className="mt-2 text-xs uppercase tracking-[0.15em] text-[#d8ccb7]/80">
+                {sortedPendingMembers.length > 0 ? `${sortedPendingMembers.length} request(s) awaiting review` : "No requests awaiting review"}
+              </p>
+            ) : null}
+            {isHost && sortedPendingMembers.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={Boolean(membershipActionId) || Boolean(membershipBulkAction)}
+                  onClick={() => updateAllPendingMemberships("ACTIVE")}
+                  className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs uppercase tracking-[0.12em] text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {membershipBulkAction === "ACTIVE" ? "Approving all..." : "Approve all"}
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(membershipActionId) || Boolean(membershipBulkAction)}
+                  onClick={() => updateAllPendingMemberships("REJECTED")}
+                  className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs uppercase tracking-[0.12em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {membershipBulkAction === "REJECTED" ? "Rejecting all..." : "Reject all"}
+                </button>
+              </div>
+            ) : null}
             <div className="mt-4 space-y-2">
-              {pendingMembers.map((member) => (
+              {sortedPendingMembers.map((member) => (
                   <div
                     key={member.membership_id}
+                    data-testid={`pending-request-${member.membership_id}`}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#f1e6d6]/25 bg-[#0f1319]/45 px-3 py-2"
                   >
                     <div>
@@ -803,16 +946,18 @@ export default function GroupDashboard() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        disabled={!isHost || membershipActionId === member.membership_id}
+                        disabled={!isHost || membershipActionId === member.membership_id || Boolean(membershipBulkAction)}
                         onClick={() => updatePendingMembership(member.membership_id, "ACTIVE")}
+                        data-testid={`approve-request-${member.membership_id}`}
                         className="rounded-lg border border-emerald-300/35 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {membershipActionId === member.membership_id ? "Approving..." : "Approve"}
                       </button>
                       <button
                         type="button"
-                        disabled={!isHost || membershipActionId === member.membership_id}
+                        disabled={!isHost || membershipActionId === member.membership_id || Boolean(membershipBulkAction)}
                         onClick={() => updatePendingMembership(member.membership_id, "REJECTED")}
+                        data-testid={`reject-request-${member.membership_id}`}
                         className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1 text-xs text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {membershipActionId === member.membership_id ? "Rejecting..." : "Reject"}
@@ -820,8 +965,8 @@ export default function GroupDashboard() {
                     </div>
                   </div>
                 ))}
-              {pendingMembers.length === 0 ? (
-                <p className="text-sm text-[#e8dbc7]/80">No pending requests.</p>
+              {sortedPendingMembers.length === 0 ? (
+                <p className="text-sm text-[#e8dbc7]/80">{isHost ? "No pending requests." : "Pending requests are visible to host only."}</p>
               ) : null}
             </div>
           </section>
@@ -868,6 +1013,22 @@ export default function GroupDashboard() {
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 text-[11px] uppercase tracking-[0.12em]">
+                {["ALL", "PENDING", "DELIVERED", "FAILED", "BOUNCED"].map((deliveryKey) => (
+                  <button
+                    key={deliveryKey}
+                    type="button"
+                    onClick={() => setInviteDeliveryFilter(deliveryKey)}
+                    className={`rounded-md border px-2 py-1 transition ${
+                      inviteDeliveryFilter === deliveryKey
+                        ? "border-sky-300/55 bg-sky-500/18 text-sky-100"
+                        : "border-white/20 bg-white/5 text-[#d8ccb7]/85 hover:bg-white/12"
+                    }`}
+                  >
+                    {deliveryKey}
+                  </button>
+                ))}
               </div>
               {visibleInvites.slice(0, 6).map((invite) => (
                 <div

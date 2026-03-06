@@ -110,10 +110,33 @@ def test_public_join_request_host_approve_reject(client):
     assert host_approve.status_code == 200
     assert host_approve.json()["status"] == "ACTIVE"
 
+    requester_notifications = client.get("/api/v1/notifications", headers=requester_headers)
+    assert requester_notifications.status_code == 200
+    requester_kinds = [n["kind"] for n in requester_notifications.json()]
+    assert "JOIN_REQUEST_APPROVED" in requester_kinds
+
     members = client.get(f"/api/v1/groups/{group_id}/members", headers=host_headers)
     assert members.status_code == 200
     pending = [m for m in members.json()["members"] if m["status"] == "PENDING"]
     assert len(pending) == 0
+
+    requester2_headers = register_and_login(client, "requester2@example.com")
+    join_request_2 = client.post(f"/api/v1/groups/{group_id}/join-request", headers=requester2_headers)
+    assert join_request_2.status_code == 201
+    membership_id_2 = join_request_2.json()["membership_id"]
+
+    host_reject = client.patch(
+        f"/api/v1/groups/{group_id}/members/{membership_id_2}/status",
+        json={"status": "REJECTED"},
+        headers=host_headers,
+    )
+    assert host_reject.status_code == 200
+    assert host_reject.json()["status"] == "REJECTED"
+
+    requester2_notifications = client.get("/api/v1/notifications", headers=requester2_headers)
+    assert requester2_notifications.status_code == 200
+    requester2_kinds = [n["kind"] for n in requester2_notifications.json()]
+    assert "JOIN_REQUEST_REJECTED" in requester2_kinds
 
 
 def test_members_and_preferences_error_paths(client):
@@ -311,3 +334,25 @@ def test_invite_delivery_webhook_and_status_tracking(client, monkeypatch):
     assert webhook_ok.status_code == 200
     assert webhook_ok.json()["delivery_status"] == "DELIVERED"
     assert webhook_ok.json()["delivery_provider_id"] == "provider-msg-123"
+
+
+def test_group_metrics_snapshot_history(client):
+    host_headers = register_and_login(client, "host-metrics@example.com")
+    outsider_headers = register_and_login(client, "outsider-metrics@example.com")
+
+    created = client.post("/api/v1/groups", json={"name": "Metrics Trend Trip", "is_public": False}, headers=host_headers)
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+
+    snapshot = client.post(f"/api/v1/groups/{group_id}/metrics/snapshot", headers=host_headers)
+    assert snapshot.status_code == 201
+    assert "preferenceCompletionPercent" in snapshot.json()
+    assert "itineraryConfidenceScore" in snapshot.json()
+
+    history = client.get(f"/api/v1/groups/{group_id}/metrics/history", headers=host_headers)
+    assert history.status_code == 200
+    assert isinstance(history.json(), list)
+    assert len(history.json()) >= 1
+
+    forbidden_snapshot = client.post(f"/api/v1/groups/{group_id}/metrics/snapshot", headers=outsider_headers)
+    assert_error_envelope(forbidden_snapshot, 403)
