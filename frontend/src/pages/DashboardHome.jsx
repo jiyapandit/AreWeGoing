@@ -3,6 +3,7 @@ import { Compass, Home, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import AppToast from "@/components/ui/app-toast";
 
 function getAccessToken() {
   return (
@@ -14,7 +15,7 @@ export default function DashboardHome() {
   const token = getAccessToken();
   const [myGroups, setMyGroups] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [toast, setToast] = useState({ message: "", type: "info" });
 
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
   const groupsApiBaseUrl = useMemo(
@@ -27,7 +28,7 @@ export default function DashboardHome() {
     async function loadGroups() {
       if (!token) return;
       setLoading(true);
-      setErrorMessage("");
+      setToast({ message: "", type: "info" });
       try {
         const { data } = await axios.get(`${groupsApiBaseUrl}/my`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -35,7 +36,7 @@ export default function DashboardHome() {
         });
         if (isMounted) setMyGroups(Array.isArray(data) ? data : []);
       } catch {
-        if (isMounted) setErrorMessage("Could not load your trips. Please sign in again.");
+        if (isMounted) setToast({ message: "Could not load your trips. Please sign in again.", type: "error" });
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -48,6 +49,11 @@ export default function DashboardHome() {
 
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
+      <AppToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "info" })}
+      />
       <div className="group-bg-gradient-join absolute inset-0" />
       <div className="scene-photo-wash-dashboard absolute inset-0 opacity-36" />
       <div className="group-cinematic-vignette absolute inset-0" />
@@ -91,10 +97,17 @@ export default function DashboardHome() {
             </nav>
           </div>
 
-          {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
-          {loading ? <p className="mt-4 text-sm text-[#f1e7d7]/90">Loading your trips...</p> : null}
-
           <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {loading && myGroups.length === 0
+              ? Array.from({ length: 3 }).map((_, index) => (
+                  <div key={`trip-skeleton-${index}`} className="skeleton-card">
+                    <div className="skeleton-block h-6 w-2/3" />
+                    <div className="mt-2 skeleton-block h-4 w-1/3" />
+                    <div className="mt-4 skeleton-block h-4 w-1/2" />
+                    <div className="mt-6 skeleton-block h-4 w-2/3" />
+                  </div>
+                ))
+              : null}
             {myGroups.map((group) => (
               <Link
                 key={group.id}

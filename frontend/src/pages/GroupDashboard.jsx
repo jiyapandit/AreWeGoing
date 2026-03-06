@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, CheckCircle2, Home, Mail, RefreshCcw, Users } from
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import AppToast from "@/components/ui/app-toast";
 import { FluidDropdown } from "@/components/ui/fluid-dropdown";
 
 function getAccessToken() {
@@ -39,8 +40,7 @@ export default function GroupDashboard() {
   const [invites, setInvites] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [toast, setToast] = useState({ message: "", type: "info" });
 
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
   const groupsApiBaseUrl = useMemo(
@@ -84,7 +84,7 @@ export default function GroupDashboard() {
     let isMounted = true;
     async function loadGroupData() {
       setLoading(true);
-      setErrorMessage("");
+      setToast({ message: "", type: "info" });
       try {
         const [groupRes, membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
           axios.get(`${groupsApiBaseUrl}/${groupId}`, { headers: authHeaders }),
@@ -114,11 +114,11 @@ export default function GroupDashboard() {
       } catch (error) {
         if (!isMounted) return;
         if (error?.response?.status === 403) {
-          setErrorMessage("You do not have access to this group.");
+          setToast({ message: "You do not have access to this group.", type: "error" });
         } else if (error?.response?.status === 404) {
-          setErrorMessage("Group not found.");
+          setToast({ message: "Group not found.", type: "error" });
         } else {
-          setErrorMessage("Could not load group dashboard.");
+          setToast({ message: "Could not load group dashboard.", type: "error" });
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -152,8 +152,7 @@ export default function GroupDashboard() {
   }, [authApiBaseUrl, authHeaders, authToken, groupId, groupsApiBaseUrl, navigate, rawApiBaseUrl]);
 
   async function refreshDashboard() {
-    setSuccessMessage("");
-    setErrorMessage("");
+    setToast({ message: "", type: "info" });
     setLoading(true);
     try {
       const [membersRes, statusRes, metricsRes, invitesRes, notificationsRes, meRes] = await Promise.all([
@@ -179,77 +178,72 @@ export default function GroupDashboard() {
         setItinerary(null);
       }
     } catch {
-      setErrorMessage("Could not refresh dashboard data.");
+      setToast({ message: "Could not refresh dashboard data.", type: "error" });
     } finally {
       setLoading(false);
     }
   }
 
   async function generateItinerary() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/generate`, {}, { headers: authHeaders });
       setItinerary(data);
-      setSuccessMessage("Itinerary draft generated.");
+      setToast({ message: "Itinerary draft generated.", type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 409) {
-        setErrorMessage(error?.response?.data?.message || "Cannot generate itinerary.");
+        setToast({ message: error?.response?.data?.message || "Cannot generate itinerary.", type: "error" });
       } else {
-        setErrorMessage("Could not generate itinerary.");
+        setToast({ message: "Could not generate itinerary.", type: "error" });
       }
     }
   }
 
   async function moveToReview() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/review`, {}, { headers: authHeaders });
       setItinerary(data);
-      setSuccessMessage("Itinerary moved to review.");
+      setToast({ message: "Itinerary moved to review.", type: "success" });
       await refreshDashboard();
     } catch (error) {
-      setErrorMessage(error?.response?.data?.message || "Could not move itinerary to review.");
+      setToast({ message: error?.response?.data?.message || "Could not move itinerary to review.", type: "error" });
     }
   }
 
   async function voteItinerary() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       await axios.post(`${groupsApiBaseUrl}/${groupId}/vote`, { value: voteValue }, { headers: authHeaders });
-      setSuccessMessage("Vote submitted.");
+      setToast({ message: "Vote submitted.", type: "success" });
       await refreshDashboard();
     } catch (error) {
-      setErrorMessage(error?.response?.data?.message || "Could not submit vote.");
+      setToast({ message: error?.response?.data?.message || "Could not submit vote.", type: "error" });
     }
   }
 
   async function lockItineraryNow() {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     if (!isHost) {
-      setErrorMessage("Only host can lock itinerary.");
+      setToast({ message: "Only host can lock itinerary.", type: "error" });
       return;
     }
     try {
       const { data } = await axios.post(`${groupsApiBaseUrl}/${groupId}/itinerary/lock`, {}, { headers: authHeaders });
       setItinerary(data);
-      setSuccessMessage("Itinerary locked.");
+      setToast({ message: "Itinerary locked.", type: "success" });
       await refreshDashboard();
     } catch (error) {
-      setErrorMessage(error?.response?.data?.message || "Could not lock itinerary.");
+      setToast({ message: error?.response?.data?.message || "Could not lock itinerary.", type: "error" });
     }
   }
 
   async function sendInvite(event) {
     event.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     if (!inviteEmail.trim()) {
-      setErrorMessage("Enter email to invite.");
+      setToast({ message: "Enter email to invite.", type: "error" });
       return;
     }
     try {
@@ -259,22 +253,21 @@ export default function GroupDashboard() {
         { headers: authHeaders }
       );
       setInviteEmail("");
-      setSuccessMessage("Invite sent.");
+      setToast({ message: "Invite sent.", type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 403) {
-        setErrorMessage("Only host can send invites.");
+        setToast({ message: "Only host can send invites.", type: "error" });
       } else {
-        setErrorMessage("Could not send invite.");
+        setToast({ message: "Could not send invite.", type: "error" });
       }
     }
   }
 
   async function updatePendingMembership(membershipId, nextStatus) {
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     if (!isHost) {
-      setErrorMessage("Only host can update join requests.");
+      setToast({ message: "Only host can update join requests.", type: "error" });
       return;
     }
     try {
@@ -283,15 +276,15 @@ export default function GroupDashboard() {
         { status: nextStatus },
         { headers: authHeaders }
       );
-      setSuccessMessage(`Request ${nextStatus === "ACTIVE" ? "approved" : "rejected"}.`);
+      setToast({ message: `Request ${nextStatus === "ACTIVE" ? "approved" : "rejected"}.`, type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 403) {
-        setErrorMessage("Only host can update membership status.");
+        setToast({ message: "Only host can update membership status.", type: "error" });
       } else if (error?.response?.status === 404) {
-        setErrorMessage("Membership request not found.");
+        setToast({ message: "Membership request not found.", type: "error" });
       } else {
-        setErrorMessage("Could not update request.");
+        setToast({ message: "Could not update request.", type: "error" });
       }
     }
   }
@@ -299,8 +292,7 @@ export default function GroupDashboard() {
   async function submitPreferences(event) {
     event.preventDefault();
     setSaving(true);
-    setErrorMessage("");
-    setSuccessMessage("");
+    setToast({ message: "", type: "info" });
     try {
       await axios.put(
         `${groupsApiBaseUrl}/${groupId}/preferences`,
@@ -322,15 +314,15 @@ export default function GroupDashboard() {
         },
         { headers: authHeaders }
       );
-      setSuccessMessage("Preferences saved.");
+      setToast({ message: "Preferences saved.", type: "success" });
       await refreshDashboard();
     } catch (error) {
       if (error?.response?.status === 422) {
-        setErrorMessage("Invalid preferences. Check values and try again.");
+        setToast({ message: "Invalid preferences. Check values and try again.", type: "error" });
       } else if (error?.response?.status === 403) {
-        setErrorMessage("You are not an active member of this group.");
+        setToast({ message: "You are not an active member of this group.", type: "error" });
       } else {
-        setErrorMessage("Could not save preferences.");
+        setToast({ message: "Could not save preferences.", type: "error" });
       }
     } finally {
       setSaving(false);
@@ -339,6 +331,11 @@ export default function GroupDashboard() {
 
   return (
     <div className="group-scene relative min-h-screen overflow-hidden text-[#f7f1e6]">
+      <AppToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "info" })}
+      />
       <div className="group-bg-gradient-create absolute inset-0" />
       <div className="scene-photo-wash-dashboard absolute inset-0 opacity-32" />
       <div className="group-cinematic-vignette absolute inset-0" />
@@ -391,24 +388,29 @@ export default function GroupDashboard() {
             <a href="#team-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Team</a>
             <a href="#updates-section" className="rounded-lg border border-white/25 bg-white/5 px-2.5 py-1 transition hover:bg-white/15">Updates</a>
           </nav>
-          {errorMessage ? <p className="mt-4 text-sm text-[#ffcfc5]">{errorMessage}</p> : null}
-          {successMessage ? <p className="mt-2 text-sm text-[#d9ffdf]">{successMessage}</p> : null}
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {[
-            ["Group size", metrics?.groupSize],
-            ["Preferences completion", `${metrics?.preferenceCompletionPercent ?? 0}%`],
-            ["Conflict count", metrics?.conflictCount ?? 0],
-            ["Itinerary state", itinerary?.state || "NOT_CREATED"],
-            ["Itinerary confidence", `${metrics?.itineraryConfidenceScore ?? 0}%`],
-            ["Approval status", metrics?.approvalStatus || "NOT_STARTED"],
-          ].map(([label, value]) => (
-            <div key={label} className="metric-tile p-4 transition">
-              <p className="text-xs uppercase tracking-[0.16em] text-[#f1e7d7]/90">{label}</p>
-              <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
-            </div>
-          ))}
+          {loading && !metrics
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <div key={`metric-skeleton-${index}`} className="skeleton-card">
+                  <div className="skeleton-block h-4 w-2/3" />
+                  <div className="mt-3 skeleton-block h-8 w-1/2" />
+                </div>
+              ))
+            : [
+                ["Group size", metrics?.groupSize],
+                ["Preferences completion", `${metrics?.preferenceCompletionPercent ?? 0}%`],
+                ["Conflict count", metrics?.conflictCount ?? 0],
+                ["Itinerary state", itinerary?.state || "NOT_CREATED"],
+                ["Itinerary confidence", `${metrics?.itineraryConfidenceScore ?? 0}%`],
+                ["Approval status", metrics?.approvalStatus || "NOT_STARTED"],
+              ].map(([label, value]) => (
+                <div key={label} className="metric-tile p-4 transition">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#f1e7d7]/90">{label}</p>
+                  <p className="mt-2 text-2xl text-[#fff7ea]">{value}</p>
+                </div>
+              ))}
         </section>
 
         <section className="dashboard-section grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
