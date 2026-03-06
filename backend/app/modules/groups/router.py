@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.deps import get_db
@@ -12,6 +13,7 @@ from app.modules.groups.schemas import (
     GroupResponse,
     InviteRequest,
     InviteResponse,
+    InviteDeliveryWebhookRequest,
     JoinGroupRequest,
     JoinRequestResponse,
     UpdateInviteStatusRequest,
@@ -29,6 +31,7 @@ from app.modules.groups.service import (
     list_group_invites,
     list_user_invites,
     list_public_groups,
+    process_invite_delivery_webhook,
     request_join_public_group,
     send_group_invite,
     update_group_invite_status,
@@ -150,6 +153,11 @@ def create_invite(
             group_id=invite.group_id,
             email=invite.email,
             status=invite.status,
+            delivery_status=invite.delivery_status,
+            delivery_provider=invite.delivery_provider,
+            delivery_provider_id=invite.delivery_provider_id,
+            delivery_attempts=invite.delivery_attempts,
+            delivery_last_error=invite.delivery_last_error,
             created_at=invite.created_at,
         )
     except ValueError as e:
@@ -165,7 +173,18 @@ def get_invites(group_id: int, db: Session = Depends(get_db), current_user: User
     try:
         rows = list_group_invites(db, group_id, current_user.id)
         return [
-            InviteResponse(id=row.id, group_id=row.group_id, email=row.email, status=row.status, created_at=row.created_at)
+            InviteResponse(
+                id=row.id,
+                group_id=row.group_id,
+                email=row.email,
+                status=row.status,
+                delivery_status=row.delivery_status,
+                delivery_provider=row.delivery_provider,
+                delivery_provider_id=row.delivery_provider_id,
+                delivery_attempts=row.delivery_attempts,
+                delivery_last_error=row.delivery_last_error,
+                created_at=row.created_at,
+            )
             for row in rows
         ]
     except ValueError as e:
@@ -189,6 +208,11 @@ def accept_invite(invite_id: int, db: Session = Depends(get_db), current_user: U
             group_id=invite.group_id,
             email=invite.email,
             status=invite.status,
+            delivery_status=invite.delivery_status,
+            delivery_provider=invite.delivery_provider,
+            delivery_provider_id=invite.delivery_provider_id,
+            delivery_attempts=invite.delivery_attempts,
+            delivery_last_error=invite.delivery_last_error,
             created_at=invite.created_at,
         )
     except ValueError as e:
@@ -218,6 +242,11 @@ def set_invite_status(
             group_id=invite.group_id,
             email=invite.email,
             status=invite.status,
+            delivery_status=invite.delivery_status,
+            delivery_provider=invite.delivery_provider,
+            delivery_provider_id=invite.delivery_provider_id,
+            delivery_attempts=invite.delivery_attempts,
+            delivery_last_error=invite.delivery_last_error,
             created_at=invite.created_at,
         )
     except ValueError as e:
@@ -229,6 +258,44 @@ def set_invite_status(
             raise HTTPException(status_code=404, detail="Invite not found")
         if str(e) == "INVITE_NOT_REVOCABLE":
             raise HTTPException(status_code=409, detail="Invite cannot be revoked in its current state")
+        raise
+
+
+@router.post("/invites/webhook", response_model=InviteResponse)
+def invite_delivery_webhook(
+    payload: InviteDeliveryWebhookRequest,
+    db: Session = Depends(get_db),
+    x_invite_webhook_secret: str | None = Header(default=None),
+):
+    configured_secret = os.getenv("INVITE_WEBHOOK_SECRET")
+    if configured_secret and x_invite_webhook_secret != configured_secret:
+        raise HTTPException(status_code=403, detail="Invalid invite webhook secret")
+    try:
+        invite = process_invite_delivery_webhook(
+            db=db,
+            invite_id=payload.invite_id,
+            delivery_status=payload.status,
+            provider=payload.provider,
+            provider_message_id=payload.provider_message_id,
+            error_message=payload.error_message,
+        )
+        return InviteResponse(
+            id=invite.id,
+            group_id=invite.group_id,
+            email=invite.email,
+            status=invite.status,
+            delivery_status=invite.delivery_status,
+            delivery_provider=invite.delivery_provider,
+            delivery_provider_id=invite.delivery_provider_id,
+            delivery_attempts=invite.delivery_attempts,
+            delivery_last_error=invite.delivery_last_error,
+            created_at=invite.created_at,
+        )
+    except ValueError as e:
+        if str(e) == "INVITE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Invite not found")
+        if str(e) == "INVALID_DELIVERY_STATUS":
+            raise HTTPException(status_code=422, detail="Invalid delivery status")
         raise
 
 @router.get("/{group_id}")

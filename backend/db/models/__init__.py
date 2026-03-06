@@ -9,3 +9,4 @@ from .itinerary_item import ItineraryItem
 from .vote import Vote
 from .notification import Notification
 from .invite import Invite
+from .invite_delivery_attempt import InviteDeliveryAttempt

@@ -879,6 +879,9 @@ export default function GroupDashboard() {
                     <p className="text-[11px] uppercase tracking-[0.15em] text-[#e8dbc7]/70">
                       {new Date(invite.created_at).toLocaleString()}
                     </p>
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-[#d3c7b2]/70">
+                      Delivery: {invite.delivery_status || "PENDING"} | Attempts: {invite.delivery_attempts ?? 0}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="text-xs uppercase tracking-[0.15em] text-[#e8dbc7]/75">{invite.status}</p>

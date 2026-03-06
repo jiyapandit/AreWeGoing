@@ -271,3 +271,43 @@ def test_invite_accept_flow_and_notifications(client):
     assert host_notifications.status_code == 200
     kinds = [n["kind"] for n in host_notifications.json()]
     assert "INVITE_ACCEPTED" in kinds
+
+
+def test_invite_delivery_webhook_and_status_tracking(client, monkeypatch):
+    monkeypatch.setenv("INVITE_WEBHOOK_SECRET", "test-secret")
+    host_headers = register_and_login(client, "host-webhook@example.com")
+
+    created = client.post("/api/v1/groups", json={"name": "Webhook Trip", "is_public": False}, headers=host_headers)
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+
+    invite_res = client.post(
+        f"/api/v1/groups/{group_id}/invites",
+        json={"email": "someone-webhook@example.com"},
+        headers=host_headers,
+    )
+    assert invite_res.status_code == 201
+    invite_payload = invite_res.json()
+    invite_id = invite_payload["id"]
+    assert "delivery_status" in invite_payload
+    assert "delivery_attempts" in invite_payload
+
+    forbidden_webhook = client.post(
+        "/api/v1/groups/invites/webhook",
+        json={"invite_id": invite_id, "status": "DELIVERED"},
+    )
+    assert_error_envelope(forbidden_webhook, 403)
+
+    webhook_ok = client.post(
+        "/api/v1/groups/invites/webhook",
+        headers={"x-invite-webhook-secret": "test-secret"},
+        json={
+            "invite_id": invite_id,
+            "status": "DELIVERED",
+            "provider": "smtp",
+            "provider_message_id": "provider-msg-123",
+        },
+    )
+    assert webhook_ok.status_code == 200
+    assert webhook_ok.json()["delivery_status"] == "DELIVERED"
+    assert webhook_ok.json()["delivery_provider_id"] == "provider-msg-123"

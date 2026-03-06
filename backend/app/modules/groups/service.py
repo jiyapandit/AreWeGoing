@@ -1,11 +1,14 @@
 import secrets
 import os
 import smtplib
+import time
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from sqlalchemy.orm import Session
 
 from db.models.group import Group
 from db.models.invite import Invite
+from db.models.invite_delivery_attempt import InviteDeliveryAttempt
 from db.models.membership import Membership
 from db.models.notification import Notification
 from db.models.preference import Preference
@@ -14,16 +17,25 @@ from db.models.vote import Vote
 from db.models.user import User
 
 
-def _try_send_invite_email(group: Group, recipient_email: str):
+def _send_invite_email_once(group: Group, recipient_email: str, invite_id: int, attempt_number: int):
+    provider = os.getenv("INVITE_EMAIL_PROVIDER", "smtp").strip().lower()
+    app_base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
+
+    if provider == "noop":
+        message_id = f"noop-{invite_id}-{attempt_number}"
+        return True, "noop", message_id, None
+
+    if provider != "smtp":
+        return False, provider, None, f"UNSUPPORTED_PROVIDER:{provider}"
+
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASSWORD")
     smtp_from = os.getenv("SMTP_FROM")
-    app_base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
 
     if not smtp_host or not smtp_from:
-        return
+        return False, "smtp", None, "SMTP_NOT_CONFIGURED"
 
     invite_link = f"{app_base_url.rstrip('/')}/join-group?code={group.join_code}"
     message = EmailMessage()
@@ -42,9 +54,97 @@ def _try_send_invite_email(group: Group, recipient_email: str):
             if smtp_user and smtp_pass:
                 server.login(smtp_user, smtp_pass)
             server.send_message(message)
-    except Exception:
-        # Email delivery is best-effort; invite/notification flow should not fail because SMTP is unavailable.
-        return
+        message_id = message.get("Message-Id") or f"smtp-{invite_id}-{attempt_number}"
+        return True, "smtp", message_id, None
+    except Exception as error:
+        # Delivery failures are tracked and can be reconciled via webhook/retry.
+        return False, "smtp", None, str(error)
+
+
+def _record_delivery_attempt(
+    db: Session,
+    invite: Invite,
+    attempt_number: int,
+    provider: str,
+    status: str,
+    provider_message_id: str | None = None,
+    error_message: str | None = None,
+):
+    db.add(
+        InviteDeliveryAttempt(
+            invite_id=invite.id,
+            attempt_number=attempt_number,
+            provider=provider,
+            status=status,
+            provider_message_id=provider_message_id,
+            error_message=error_message,
+        )
+    )
+
+
+def _deliver_invite_email_with_retries(db: Session, invite: Invite, group: Group):
+    max_retries = max(1, int(os.getenv("INVITE_EMAIL_MAX_RETRIES", "3")))
+    retry_delay_seconds = max(0.0, float(os.getenv("INVITE_EMAIL_RETRY_DELAY_SECONDS", "0")))
+
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        ok, provider, provider_message_id, error_message = _send_invite_email_once(group, invite.email, invite.id, attempt)
+        invite.delivery_provider = provider
+        invite.delivery_attempts = attempt
+        invite.delivery_last_attempt_at = datetime.now(timezone.utc)
+        if ok:
+            invite.delivery_status = "DELIVERED"
+            invite.delivery_provider_id = provider_message_id
+            invite.delivery_last_error = None
+            _record_delivery_attempt(
+                db=db,
+                invite=invite,
+                attempt_number=attempt,
+                provider=provider or "unknown",
+                status="DELIVERED",
+                provider_message_id=provider_message_id,
+                error_message=None,
+            )
+            db.add(invite)
+            db.commit()
+            db.refresh(invite)
+            return
+
+        last_error = error_message or "UNKNOWN_DELIVERY_ERROR"
+        invite.delivery_last_error = last_error
+        _record_delivery_attempt(
+            db=db,
+            invite=invite,
+            attempt_number=attempt,
+            provider=provider or "unknown",
+            status="FAILED",
+            provider_message_id=provider_message_id,
+            error_message=last_error,
+        )
+        if last_error == "SMTP_NOT_CONFIGURED":
+            invite.delivery_status = "PENDING"
+            db.add(invite)
+            db.commit()
+            db.refresh(invite)
+            return
+
+        if attempt < max_retries and retry_delay_seconds > 0:
+            db.add(invite)
+            db.commit()
+            time.sleep(retry_delay_seconds)
+
+    invite.delivery_status = "FAILED"
+    db.add(invite)
+    db.add(
+        Notification(
+            user_id=invite.inviter_user_id,
+            group_id=invite.group_id,
+            kind="INVITE_EMAIL_FAILED",
+            message=f'Invite email to "{invite.email}" failed after {max_retries} attempts.',
+        )
+    )
+    db.commit()
+    db.refresh(invite)
 
 
 def _generate_join_code() -> str:
@@ -366,7 +466,13 @@ def send_group_invite(db: Session, group_id: int, inviter_user_id: int, email: s
     if not group:
         raise ValueError("GROUP_NOT_FOUND")
 
-    invite = Invite(group_id=group_id, inviter_user_id=inviter_user_id, email=email.strip().lower(), status="SENT")
+    invite = Invite(
+        group_id=group_id,
+        inviter_user_id=inviter_user_id,
+        email=email.strip().lower(),
+        status="SENT",
+        delivery_status="PENDING",
+    )
     db.add(invite)
 
     invited_user = db.query(User).filter(User.email == email.strip().lower()).first()
@@ -382,7 +488,7 @@ def send_group_invite(db: Session, group_id: int, inviter_user_id: int, email: s
 
     db.commit()
     db.refresh(invite)
-    _try_send_invite_email(group, invite.email)
+    _deliver_invite_email_with_retries(db, invite, group)
     return invite
 
 
@@ -421,6 +527,7 @@ def list_user_invites(db: Session, user_id: int):
             "inviter_user_id": invite.inviter_user_id,
             "email": invite.email,
             "status": invite.status,
+            "delivery_status": invite.delivery_status,
             "created_at": invite.created_at,
         }
         for invite, group in rows
@@ -499,6 +606,57 @@ def accept_group_invite(db: Session, invite_id: int, user_id: int) -> Invite:
                 group_id=invite.group_id,
                 kind="INVITE_ACCEPTED",
                 message=f'{user.email} accepted your invite to "{group.name}".',
+            )
+        )
+
+    db.commit()
+    db.refresh(invite)
+    return invite
+
+
+def process_invite_delivery_webhook(
+    db: Session,
+    invite_id: int,
+    delivery_status: str,
+    provider: str | None = None,
+    provider_message_id: str | None = None,
+    error_message: str | None = None,
+) -> Invite:
+    invite = db.query(Invite).filter(Invite.id == invite_id).first()
+    if not invite:
+        raise ValueError("INVITE_NOT_FOUND")
+
+    valid_statuses = {"DELIVERED", "FAILED", "BOUNCED"}
+    normalized = delivery_status.strip().upper()
+    if normalized not in valid_statuses:
+        raise ValueError("INVALID_DELIVERY_STATUS")
+
+    next_attempt = (invite.delivery_attempts or 0) + 1
+    _record_delivery_attempt(
+        db=db,
+        invite=invite,
+        attempt_number=next_attempt,
+        provider=(provider or invite.delivery_provider or "webhook").lower(),
+        status=normalized,
+        provider_message_id=provider_message_id,
+        error_message=error_message,
+    )
+
+    invite.delivery_attempts = next_attempt
+    invite.delivery_status = normalized
+    invite.delivery_provider = (provider or invite.delivery_provider or "webhook").lower()
+    invite.delivery_provider_id = provider_message_id or invite.delivery_provider_id
+    invite.delivery_last_error = error_message if normalized != "DELIVERED" else None
+    invite.delivery_last_attempt_at = datetime.now(timezone.utc)
+    db.add(invite)
+
+    if normalized in {"FAILED", "BOUNCED"}:
+        db.add(
+            Notification(
+                user_id=invite.inviter_user_id,
+                group_id=invite.group_id,
+                kind="INVITE_EMAIL_FAILED",
+                message=f'Invite email to "{invite.email}" reported {normalized.lower()}.',
             )
         )
 
