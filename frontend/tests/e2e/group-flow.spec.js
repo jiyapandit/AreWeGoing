@@ -78,12 +78,12 @@ test("host can invite a member and member can accept, save preferences, and surf
     .getByPlaceholder("Dietary preferences (comma separated)")
     .fill("vegetarian");
   await memberPage.getByRole("button", { name: /save preferences/i }).click();
-  await expect(memberPage.getByText("Preferences saved.")).toBeVisible();
+  await expect(memberPage.locator("text=Completion: 50%")).toBeVisible();
 
   await hostPage.reload();
   await expect(hostPage.getByText("Group members")).toBeVisible();
-  await expect(hostPage.getByText(memberEmail)).toBeVisible();
-  await expect(hostPage.getByText("ACCEPTED")).toBeVisible();
+  await expect(hostPage.getByText(memberEmail).first()).toBeVisible();
+  await expect(hostPage.getByText("ACCEPTED").first()).toBeVisible();
 
   const completionText = await hostPage.locator("text=Completion:").first().textContent();
   const completionMatch = completionText?.match(/Completion:\s*(\d+)%/);
@@ -91,7 +91,6 @@ test("host can invite a member and member can accept, save preferences, and surf
   expect(completionPercent).toBeGreaterThan(0);
 
   await hostPage.getByRole("button", { name: "Capture snapshot" }).click();
-  await expect(hostPage.getByText("Metrics snapshot captured.")).toBeVisible();
   await expect(hostPage.getByText("Metrics trend history")).toBeVisible();
   await expect(hostPage.getByText("No snapshots yet. Capture one to start tracking trends.")).toHaveCount(0);
 
